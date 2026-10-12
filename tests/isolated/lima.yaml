@@ -1,0 +1,15 @@
+# A full Ubuntu kernel: OrbStack's shared-kernel swap fails the provisioner guard.
+base: template:ubuntu-24.04
+vmType: vz
+cpus: 2
+memory: 4GiB
+disk: 20GiB
+mounts: []
+ssh:
+  forwardAgent: false
+containerd:
+  system: false
+  user: false
+portForwards:
+  - guestPortRange: [1, 65535]
+    ignore: true

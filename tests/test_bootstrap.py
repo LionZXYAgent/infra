@@ -154,6 +154,8 @@ class PrivateSourceTests(unittest.TestCase):
             with self.subTest(read_only=read_only):
                 writes = []
                 def fake_capture(args, **kwargs):
+                    if args[0] == 'ssh-keygen':
+                        return public.encode()
                     if args[:2] == ['gh', 'api']:
                         if args[-1].endswith('/keys'):
                             return json.dumps([[{'key': public, 'read_only': read_only}]]).encode()
@@ -169,6 +171,22 @@ class PrivateSourceTests(unittest.TestCase):
                         with self.assertRaisesRegex(ValueError, 'read.only'):
                             bootstrap.ensure_secrets_access(['kubectl'], {}, 'example-owner', 'infra-secrets')
                 self.assertEqual(writes, [])
+
+    def test_mismatched_private_and_public_credentials_are_rejected(self):
+        secret = {'data': {k: base64.b64encode(v.encode()).decode() for k, v in {
+            'identity': 'private-key', 'identity.pub': 'ssh-ed25519 registered-key',
+            'known_hosts': 'github.com fixture'}.items()}}
+        def fake_capture(args, **kwargs):
+            if args[0] == 'ssh-keygen':
+                return b'ssh-ed25519 different-key'
+            if args[:2] == ['gh', 'api']:
+                if args[-1].endswith('/keys'):
+                    return b'[[{"key":"ssh-ed25519 registered-key","read_only":true}]]'
+                return b'{"private":true,"permissions":{"admin":true}}'
+            return json.dumps(secret).encode()
+        with patch.object(bootstrap, 'capture', side_effect=fake_capture):
+            with self.assertRaisesRegex(ValueError, 'key pair'):
+                bootstrap.ensure_secrets_access(['kubectl'], {}, 'example-owner', 'infra-secrets')
 
     def test_new_key_is_registered_read_only_and_applied_without_argv_secrets(self):
         writes = []

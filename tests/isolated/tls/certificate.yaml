@@ -12,6 +12,7 @@ metadata:
   namespace: traefik
 spec:
   secretName: isolated-tls
+  commonName: demo.infra.test
   dnsNames:
     - demo.infra.test
   issuerRef:

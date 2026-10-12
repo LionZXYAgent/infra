@@ -203,10 +203,14 @@ def ensure_secrets_access(kube: list[str], env: dict[str, str], owner: str, repo
         require(all(values.get(k) for k in ('identity', 'identity.pub', 'known_hosts')),
                 'Existing infra-secrets credentials are incomplete; inspect them before retrying.')
         public = values['identity.pub']
+        derived = capture(['ssh-keygen', '-y', '-f', '/dev/stdin'],
+                          data=values['identity'].encode(), env=env).decode().strip()
+        require(len(public.split()) >= 2 and derived.split()[:2] == public.split()[:2],
+                'Existing infra-secrets credentials have a mismatched key pair; inspect them first.')
         pages = json.loads(capture(['gh', 'api', '--hostname', 'github.com', '--paginate', '--slurp',
                                     f'repos/{owner}/{repo}/keys']))
         matches = [key for page in pages for key in page
-                   if key.get('key', '').split()[:2] == public.split()[:2]]
+                   if key.get('key', '').split()[:2] == derived.split()[:2]]
         require(len(matches) == 1 and matches[0].get('read_only') is True,
                 'Existing infra-secrets key must be registered read-only on the private repository.')
         return

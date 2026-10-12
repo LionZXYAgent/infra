@@ -1,10 +1,14 @@
 """Private module boundaries, using disposable filesystem fixtures."""
 from contextlib import ExitStack
 from pathlib import Path
+import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import secretctl
@@ -36,6 +40,33 @@ class PrivateModuleTests(unittest.TestCase):
         (self.ns / 'kustomization.yaml').write_text('resources: [missing.yaml]\n')
         with self.assertRaisesRegex(ValueError, 'Index differs'):
             secretctl.check_indexes(require_secrets=False)
+
+    def test_private_source_credentials_cannot_be_user_managed(self):
+        with self.assertRaisesRegex(ValueError, 'bootstrap'):
+            secretctl.target('flux-system', 'infra-secrets')
+
+    @unittest.skipUnless(shutil.which('sops') and shutil.which('age-keygen'), 'SOPS and age tools required')
+    def test_encryption_matches_anchored_module_relative_rules(self):
+        module = self.root / 'secrets'
+        module.mkdir()
+        identity = subprocess.check_output(['age-keygen'], stderr=subprocess.PIPE)
+        recipient = subprocess.check_output(['age-keygen', '-y'], input=identity).decode().strip()
+        config = module / '.sops.yaml'
+        config.write_text(yaml.safe_dump({'creation_rules': [{
+            'path_regex': r'^demo/.*\.sops\.yaml$', 'encrypted_regex': '^data$', 'age': recipient}]}))
+        obj = {'apiVersion': 'v1', 'kind': 'Secret',
+               'metadata': {'name': 'probe', 'namespace': 'demo'},
+               'data': {'value': 'aGVsbG8='}}
+        previous = Path.cwd()
+        try:
+            os.chdir(self.root)
+            with patch.object(secretctl, 'SOPS_CONFIG', config):
+                raw = secretctl.encrypt(obj, module / 'demo/probe.sops.yaml')
+            plain = secretctl.run(['sops', '--decrypt', '--input-type', 'yaml', '--output-type', 'yaml',
+                                   '/dev/stdin'], data=raw, env=secretctl.key_env(identity))
+            self.assertEqual(yaml.safe_load(plain)['data']['value'], 'aGVsbG8=')
+        finally:
+            os.chdir(previous)
 
 
 if __name__ == '__main__':

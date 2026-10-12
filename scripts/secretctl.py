@@ -27,7 +27,8 @@ SOPS_CONFIG = SECRET_DIR / ".sops.yaml"
 RECOVERY_FILE = SECRET_DIR / "bootstrap/sops-age.age"
 NS_DIR = ROOT / "infrastructure/namespaces"
 RESERVED_NS = {"default", "kube-system", "kube-public", "kube-node-lease", "flux-system"}
-PROTECTED = {("flux-system", "sops-age"), ("flux-system", "flux-system")}
+PROTECTED = {("flux-system", "sops-age"), ("flux-system", "flux-system"),
+             ("flux-system", "infra-secrets")}
 LABEL = r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
 KEY = re.compile(r"[A-Za-z0-9._-]{1,253}\Z")
 MAX_SIZE = 1024 * 1024
@@ -178,7 +179,7 @@ def validate(obj: dict, path: Path, *, encrypted: bool) -> None:
 def encrypt(obj: dict, path: Path) -> bytes:
     validate(obj, path, encrypted=False)
     result = run(["sops", "--config", str(SOPS_CONFIG), "--encrypt",
-                  "--filename-override", path.relative_to(SECRET_DIR).as_posix(), "--input-type", "yaml",
+                  "--filename-override", str(path), "--input-type", "yaml",
                   "--output-type", "yaml", "/dev/stdin"], data=dump(obj))
     validate(load_yaml(result), path, encrypted=True)
     return result
