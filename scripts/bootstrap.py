@@ -203,9 +203,18 @@ def ensure_secrets_access(kube: list[str], env: dict[str, str], owner: str, repo
         require(all(values.get(k) for k in ('identity', 'identity.pub', 'known_hosts')),
                 'Existing infra-secrets credentials are incomplete; inspect them before retrying.')
         public = values['identity.pub']
-        derived = capture(['ssh-keygen', '-y', '-f', '/dev/stdin'],
-                          data=values['identity'].encode(), env=env).decode().strip()
-        require(len(public.split()) >= 2 and derived.split()[:2] == public.split()[:2],
+        # Flux emits PKCS8 Ed25519 keys, which OpenSSH cannot import on all hosts.
+        # Use Flux's own parser; --export captures its output without applying it.
+        with tempfile.TemporaryDirectory(prefix='.infra-git-key-') as work:
+            key = Path(work) / 'identity'
+            key.write_bytes(values['identity'].encode())
+            key.chmod(0o600)
+            parsed = secretctl.load_yaml(capture(['flux', 'create', 'secret', 'git', 'infra-secrets',
+                f'--url=ssh://git@github.com/{owner}/{repo}', f'--private-key-file={key}',
+                '--namespace=flux-system', '--export'], env=env))
+            derived = parsed.get('stringData', {}).get('identity.pub', '')
+        require(isinstance(derived, str) and len(public.split()) >= 2
+                and derived.split()[:2] == public.split()[:2],
                 'Existing infra-secrets credentials have a mismatched key pair; inspect them first.')
         pages = json.loads(capture(['gh', 'api', '--hostname', 'github.com', '--paginate', '--slurp',
                                     f'repos/{owner}/{repo}/keys']))

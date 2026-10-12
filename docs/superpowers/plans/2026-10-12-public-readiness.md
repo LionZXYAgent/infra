@@ -33,13 +33,13 @@
 
 **Interfaces:** Consumes current encrypted manifest and namespace index. Produces `secretctl.require_private_module() -> None`, constants `SECRET_DIR`, `SOPS_CONFIG`, `RECOVERY_FILE`, and `secretctl.check_indexes(*, require_secrets: bool = True) -> list[Path]`.
 
-- [ ] Write filesystem tests using temporary directories and patches to module path constants. The missing-module regression must assert `check_indexes(require_secrets=False) == []` with a valid namespace index, and `require_private_module()` raises `ValueError` containing `submodule`.
-- [ ] Run `.venv/bin/python -m unittest discover -s tests -v`. Expected: the new tests fail because the optional-module interface is absent.
-- [ ] Create the private repo with `gh repo create LionZXYOrg/infra-secrets --private`, preserve encrypted bytes, set its default branch to `main`, commit and push the private contents. Require GitHub metadata to confirm private visibility before pushing files.
-- [ ] Update paths and SOPS filename overrides in `secretctl.py`; explicitly require private-module initialization before secret reads/writes. Split public checks from private checks, validate staged Git links without treating commit objects as blob content, and reject staged public Secret manifests and recovery bundles.
-- [ ] Replace the tracked secret directory with a submodule using `git submodule add git@github.com:LionZXYOrg/infra-secrets.git secrets`. Update README commands to commit private changes before updating the module pointer.
-- [ ] Run the complete unit suite and `bash scripts/check.sh`. Expected: all pass both with the initialized module and in a temporary public checkout without module initialization.
-- [ ] Commit with `git add scripts tests README.md .gitignore .gitmodules secrets bootstrap/sops-age.age .sops.yaml` and `git commit -m 'Move encrypted secrets into a private Git module'`.
+- [x] Write filesystem tests using temporary directories and patches to module path constants. The missing-module regression must assert `check_indexes(require_secrets=False) == []` with a valid namespace index, and `require_private_module()` raises `ValueError` containing `submodule`.
+- [x] Run `.venv/bin/python -m unittest discover -s tests -v`. Expected: the new tests fail because the optional-module interface is absent.
+- [x] Create the private repo with `gh repo create LionZXYOrg/infra-secrets --private`, preserve encrypted bytes, set its default branch to `main`, commit and push the private contents. Require GitHub metadata to confirm private visibility before pushing files.
+- [x] Update paths and SOPS filename overrides in `secretctl.py`; explicitly require private-module initialization before secret reads/writes. Split public checks from private checks, validate staged Git links without treating commit objects as blob content, and reject staged public Secret manifests and recovery bundles.
+- [x] Replace the tracked secret directory with a submodule using `git submodule add git@github.com:LionZXYOrg/infra-secrets.git secrets`. Update README commands to commit private changes before updating the module pointer.
+- [x] Run the complete unit suite and `bash scripts/check.sh`. Expected: all pass both with the initialized module and in a temporary public checkout without module initialization.
+- [x] Commit with `git add scripts tests README.md .gitignore .gitmodules secrets bootstrap/sops-age.age .sops.yaml` and `git commit -m 'Move encrypted secrets into a private Git module'`.
 
 ## Task 2: Bootstrap independent private Flux source
 
@@ -47,12 +47,12 @@
 
 **Interfaces:** Consumes Task 1 constants and module validator. Produces `bootstrap.ensure_secrets_access(kube: list[str], env: dict[str, str], owner: str, repo: str) -> None`; extends `bootstrap.bootstrap_flux(..., branch: str, personal: bool, private: bool, secrets_owner: str, secrets_repo: str) -> None`.
 
-- [ ] Extend the Flux argument test to pass `private=False`, `secrets_owner='example-owner'`, and `secrets_repo='infra-secrets'`; assert `--private=false` and independent credential provisioning before reconciliation. Add tests that private repo metadata is rejected when public, and an existing deploy credential is not silently replaced.
-- [ ] Run the suite. Expected: the new signature and independent-source tests fail before implementation.
-- [ ] Read recovery configuration from the module and support an explicitly configured or existing local age identity after validating its recipient against the module rules. Verify private-module checkout and remote destination before host changes.
-- [ ] Generate private Git deploy credentials with `flux create secret git infra-secrets --url=ssh://git@github.com/OWNER/REPO --ssh-key-algorithm=ed25519 --export`, capturing the YAML privately. Register only the public key with GitHub using `read_only: true`; apply credential YAML through stdin. On an existing credential, validate key registration and read-only permissions instead of regenerating it.
-- [ ] Derive infrastructure visibility from GitHub metadata for the Flux bootstrap flag. Add a source with `spec.ref.branch: main`, `spec.secretRef.name: infra-secrets`, `spec.recurseSubmodules: false`; set `cluster-secrets` path to `./` and source name to `infra-secrets`. Keep existing dependency and deletion behavior.
-- [ ] Run the complete unit suite, public/private checks, and Kustomize builds. Expected: all pass. Commit with `git commit -am 'Bootstrap Flux with an independent private secrets source'` after staging the new source and tests.
+- [x] Extend the Flux argument test to pass `private=False`, `secrets_owner='example-owner'`, and `secrets_repo='infra-secrets'`; assert `--private=false` and independent credential provisioning before reconciliation. Add tests that private repo metadata is rejected when public, and an existing deploy credential is not silently replaced.
+- [x] Run the suite. Expected: the new signature and independent-source tests fail before implementation.
+- [x] Read recovery configuration from the module and support an explicitly configured or existing local age identity after validating its recipient against the module rules. Verify private-module checkout and remote destination before host changes.
+- [x] Generate private Git deploy credentials with `flux create secret git infra-secrets --url=ssh://git@github.com/OWNER/REPO --ssh-key-algorithm=ed25519 --export`, capturing the YAML privately. Register only the public key with GitHub using `read_only: true`; apply credential YAML through stdin. On an existing credential, validate key registration and read-only permissions instead of regenerating it.
+- [x] Derive infrastructure visibility from GitHub metadata for the Flux bootstrap flag. Add a source with `spec.ref.branch: main`, `spec.secretRef.name: infra-secrets`, `spec.recurseSubmodules: false`; set `cluster-secrets` path to `./` and source name to `infra-secrets`. Keep existing dependency and deletion behavior.
+- [x] Run the complete unit suite, public/private checks, and Kustomize builds. Expected: all pass. Commit with `git commit -am 'Bootstrap Flux with an independent private secrets source'` after staging the new source and tests.
 
 ## Task 3: Fresh isolated deployment test
 
@@ -60,13 +60,13 @@
 
 **Interfaces:** Consumes production provision script and Flux sources. Produces a redacted deployment report with exact tested Git revisions, cluster versions, readiness conditions, TLS and HTTPS checks, and test-resource cleanup results.
 
-- [ ] Create test-only local TLS manifests: a self-signed `ClusterIssuer` and `Certificate` for `demo.infra.test`, plus a demo IngressRoute using the resulting Traefik certificate. The test Kustomization includes the existing namespaces, Helm controllers, and demo application; it excludes production ACME issuers and certificates.
-- [ ] Build the isolated Kustomize tree locally. Expected: all references resolve and no production Cloudflare or ACME resources are present.
-- [ ] Create Ubuntu with `orb create --isolated --isolate-network --memory 4G --cpus 2 --disk 20G ubuntu:24.04 infra-public-test`. Provision the exact K3s version through `scripts/provision-server.sh` using the VM's assigned IP and a VM-local kubeconfig. Install pinned Flux and wait for its deployments.
-- [ ] Generate a disposable age identity and harmless encrypted Secret fixture. Push temporary test refs into the two private repositories; bootstrap read-only Git source credentials without production secrets and reconcile the isolated path. Record the created deploy key IDs and refs for cleanup.
-- [ ] Run `kubectl wait` for GitRepository, Flux Kustomization, HelmRelease, Certificate, Deployment, and Pod readiness. Verify the decrypted fixture by a comparison whose stdout is only success/failure. Check the demo HTTPS body with `curl --cacert` using the generated test certificate.
-- [ ] Update the fixture in its private test branch; reconcile and verify the new harmless value. Re-run reconciliation. Expected: healthy, idempotent synchronization and no production resources.
-- [ ] Save the redacted report and delete only test-created VM, deploy keys, and remote refs. Commit public test fixtures and documentation.
+- [x] Create test-only local TLS manifests: a self-signed `ClusterIssuer` and `Certificate` for `demo.infra.test`, plus a demo IngressRoute using the resulting Traefik certificate. The test Kustomization includes the existing namespaces, Helm controllers, and demo application; it excludes production ACME issuers and certificates.
+- [x] Build the isolated Kustomize tree locally. Expected: all references resolve and no production Cloudflare or ACME resources are present.
+- [x] Create Ubuntu with `orb create --isolated --isolate-network --memory 4G --cpus 2 --disk 20G ubuntu:24.04 infra-public-test`. Provision the exact K3s version through `scripts/provision-server.sh` using the VM's assigned IP and a VM-local kubeconfig. Install pinned Flux and wait for its deployments.
+- [x] Generate a disposable age identity and harmless encrypted Secret fixture. Push temporary test refs into the two private repositories; bootstrap read-only Git source credentials without production secrets and reconcile the isolated path. Record the created deploy key IDs and refs for cleanup.
+- [x] Run `kubectl wait` for GitRepository, Flux Kustomization, HelmRelease, Certificate, Deployment, and Pod readiness. Verify the decrypted fixture by a comparison whose stdout is only success/failure. Check the demo HTTPS body with `curl --cacert` using the generated test certificate.
+- [x] Update the fixture in its private test branch; reconcile and verify the new harmless value. Re-run reconciliation. Expected: healthy, idempotent synchronization and no production resources.
+- [x] Save the redacted report and delete only test-created VM, deploy keys, and remote refs. Commit public test fixtures and documentation.
 
 ## Task 4: Sanitized history, review, and cutover
 

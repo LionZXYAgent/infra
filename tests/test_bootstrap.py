@@ -5,6 +5,9 @@ Run: python3 -m unittest discover -s tests -v
 from pathlib import Path
 import base64
 import json
+import shutil
+import subprocess
+import tempfile
 import sys
 import unittest
 from unittest.mock import patch
@@ -140,6 +143,32 @@ class FluxArgumentsTests(unittest.TestCase):
 
 
 class PrivateSourceTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('ssh-keygen'), 'OpenSSH tools required')
+    def test_real_ed25519_key_is_reused(self):
+        with tempfile.TemporaryDirectory() as work:
+            path = Path(work) / 'key'
+            subprocess.run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', str(path)], check=True)
+            public = path.with_suffix('.pub').read_text().strip()
+            secret = {'data': {k: base64.b64encode(v).decode() for k, v in {
+                'identity': path.read_bytes(), 'identity.pub': public.encode(),
+                'known_hosts': b'github.com fixture'}.items()}}
+            real_capture = bootstrap.capture
+            def fake_capture(args, **kwargs):
+                if args[:4] == ['flux', 'create', 'secret', 'git']:
+                    filename = next(x.split('=', 1)[1] for x in args if x.startswith('--private-key-file='))
+                    self.assertEqual(Path(filename).stat().st_mode & 0o777, 0o600)
+                    derived = real_capture(['ssh-keygen', '-y', '-f', filename])
+                    return json.dumps({'stringData': {'identity.pub': derived.decode()}}).encode()
+                if args[:2] == ['gh', 'api']:
+                    if args[-1].endswith('/keys'):
+                        return json.dumps([[{'key': public, 'read_only': True}]]).encode()
+                    return b'{"private":true,"permissions":{"admin":true}}'
+                if 'get' in args:
+                    return json.dumps(secret).encode()
+                self.fail('An existing valid credential must not be replaced')
+            with patch.object(bootstrap, 'capture', side_effect=fake_capture):
+                bootstrap.ensure_secrets_access(['kubectl'], {}, 'example-owner', 'infra-secrets')
+
     def test_public_secrets_repository_is_rejected(self):
         with patch.object(bootstrap, 'capture', return_value=b'{"private":false,"permissions":{"admin":true}}'):
             with self.assertRaisesRegex(ValueError, 'private'):
@@ -154,8 +183,8 @@ class PrivateSourceTests(unittest.TestCase):
             with self.subTest(read_only=read_only):
                 writes = []
                 def fake_capture(args, **kwargs):
-                    if args[0] == 'ssh-keygen':
-                        return public.encode()
+                    if args[:4] == ['flux', 'create', 'secret', 'git']:
+                        return json.dumps({'stringData': {'identity.pub': public}}).encode()
                     if args[:2] == ['gh', 'api']:
                         if args[-1].endswith('/keys'):
                             return json.dumps([[{'key': public, 'read_only': read_only}]]).encode()
@@ -177,8 +206,8 @@ class PrivateSourceTests(unittest.TestCase):
             'identity': 'private-key', 'identity.pub': 'ssh-ed25519 registered-key',
             'known_hosts': 'github.com fixture'}.items()}}
         def fake_capture(args, **kwargs):
-            if args[0] == 'ssh-keygen':
-                return b'ssh-ed25519 different-key'
+            if args[:4] == ['flux', 'create', 'secret', 'git']:
+                return b'{"stringData":{"identity.pub":"ssh-ed25519 different-key"}}'
             if args[:2] == ['gh', 'api']:
                 if args[-1].endswith('/keys'):
                     return b'[[{"key":"ssh-ed25519 registered-key","read_only":true}]]'

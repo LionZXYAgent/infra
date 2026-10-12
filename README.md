@@ -15,7 +15,7 @@ On Linux, install the tools as root. For a regular account, add `sudo` before ea
 
 ```bash
 apt-get update
-apt-get install -y git gh age curl ca-certificates python3 python3-venv
+apt-get install -y git gh age curl ca-certificates python3 python3-venv openssh-client
 ```
 
 On a Mac with Homebrew, run `brew install git gh age python` without `sudo`.
