@@ -74,9 +74,27 @@ for tool in "$@"; do
       verify "$dir/kubectl" "$dir/checksums.txt"
       binary="$dir/kubectl"
       ;;
+    gitleaks)
+      version=${GITLEAKS_VERSION#v}
+      release_arch=$arch
+      [[ $arch != amd64 ]] || release_arch=x64
+      name="gitleaks_${version}_${os}_${release_arch}.tar.gz"
+      base="https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}"
+      fetch "$base/$name" "$dir/$name"
+      fetch "$base/gitleaks_${version}_checksums.txt" "$dir/checksums.txt"
+      verify "$dir/$name" "$dir/checksums.txt"
+      tar -xzf "$dir/$name" -C "$dir" gitleaks
+      binary="$dir/gitleaks"
+      ;;
     *) echo "Unknown tool: $tool" >&2; exit 1 ;;
   esac
   install -m 0755 "$binary" "$DEST/$tool"
-  if [[ $tool == kubectl ]]; then "$DEST/$tool" version --client; else "$DEST/$tool" --version; fi
+  if [[ $tool == kubectl ]]; then
+    "$DEST/$tool" version --client
+  elif [[ $tool == gitleaks ]]; then
+    "$DEST/$tool" version
+  else
+    "$DEST/$tool" --version
+  fi
 done
 printf '\nFor this shell: export PATH="$HOME/.local/bin:$PATH"\n'
