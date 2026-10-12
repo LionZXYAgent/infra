@@ -123,9 +123,6 @@ A contributor without private access can clone normally and run `bash scripts/ch
 and `python3 -m unittest discover -s tests -v` after installing the listed tools and
 Python requirements. Secret editing and bootstrap require the private module.
 
-See [public-readiness verification](docs/public-readiness.md) for deployment evidence
-and the retained GitHub pull request references to address before publication.
-
 ## Pull request checks
 
 GitHub Actions runs `Validate` and `Deployment` for every PR. Validation runs the
