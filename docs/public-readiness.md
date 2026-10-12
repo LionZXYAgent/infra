@@ -43,8 +43,12 @@ The original 15 commits were rewritten with git-filter-repo 2.47.0 to remove
 `secrets/`, `.sops.yaml`, and `bootstrap/sops-age.age`, while preserving useful
 history and merge topology. The migration adds only a `160000` Git link at
 `secrets`. A private original-history bundle is kept outside the publication clone.
-Cutover uses an explicit expected-head lease, followed by a fresh remote clone,
-path audit, redacted Gitleaks scan, and public checks.
+The sanitized history was published to `master` with an explicit expected-head
+lease, replacing `a51219a` with `0e5c126`. A fresh GitHub clone then passed all 21
+unit tests, public checks, redacted Gitleaks, and a path audit of all 18 reachable
+commits. Its only `secrets` entry is the private module Git link. Both repositories
+remain private. The original maintainer checkout was updated to the rewritten
+history and passed private-module checks as well.
 
 GitHub retains read-only `refs/pull/1/head` through `refs/pull/4/head` that reference
 the original history. The private fork `LionZXYAgent/infra` also retains old

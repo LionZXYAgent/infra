@@ -122,3 +122,6 @@ this repository, including encrypted copies.
 A contributor without private access can clone normally and run `bash scripts/check.sh`
 and `python3 -m unittest discover -s tests -v` after installing the listed tools and
 Python requirements. Secret editing and bootstrap require the private module.
+
+See [public-readiness verification](docs/public-readiness.md) for deployment evidence
+and the retained GitHub pull request references to address before publication.
