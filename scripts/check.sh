@@ -11,7 +11,8 @@ from pathlib import Path
 for p in Path('scripts').glob('*.py'):
     ast.parse(p.read_text(), filename=str(p))
 PY
-python3 scripts/secretctl.py check
+python3 scripts/secretctl.py check --public
+if [[ -f secrets/.git ]]; then python3 scripts/secretctl.py check; fi
 python3 - <<'PYCHECK'
 from pathlib import Path
 import re
@@ -42,12 +43,11 @@ def validate_yaml(path, raw, staged=False):
                 if not (path.parent / rel).exists():
                     raise SystemExit(f'Missing local resource in {path}: {rel}')
 
-roots = [Path(x) for x in ('bootstrap', 'clusters', 'secrets', 'infrastructure', 'apps')]
+roots = [Path(x) for x in ('bootstrap', 'clusters', 'infrastructure', 'apps', 'tests/isolated')]
 for root in roots:
     for p in root.rglob('*'):
         if p.suffix in ('.yaml', '.yml'):
             validate_yaml(p, p.read_bytes())
-validate_yaml(Path('.sops.yaml'), Path('.sops.yaml').read_bytes())
 # Check staged contents too: a clean working file does not make an unsafe index safe.
 paths = subprocess.check_output(['git', 'diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z'])
 for item in paths.split(b'\0'):
@@ -55,6 +55,13 @@ for item in paths.split(b'\0'):
         continue
     name = item.decode()
     p = Path(name)
+    if name in {'.sops.yaml', 'bootstrap/sops-age.age'} or name.startswith('secrets/'):
+        raise SystemExit(f'Private module content staged in public repository: {name}')
+    entry = subprocess.check_output(['git', 'ls-files', '--stage', '--', name])
+    if entry.startswith(b'160000 '):
+        if name != 'secrets':
+            raise SystemExit(f'Unexpected submodule: {name}')
+        continue
     if p.suffix in ('.agekey', '.key', '.pem', '.p12') or p.name.startswith('.env'):
         raise SystemExit(f'Possible plaintext credential file staged: {name}')
     raw = subprocess.check_output(['git', 'show', ':' + name])
@@ -65,9 +72,11 @@ for item in paths.split(b'\0'):
 print('Local YAML references and staged Secret manifests checked.')
 PYCHECK
 if command -v kubectl >/dev/null 2>&1; then
-  for dir in infrastructure/namespaces secrets infrastructure/controllers infrastructure/issuers infrastructure/tls apps/demo; do
+  for dir in infrastructure/namespaces infrastructure/controllers infrastructure/issuers infrastructure/tls apps/demo; do
     kubectl kustomize "$dir" >/dev/null
   done
+  if [[ -f secrets/.git ]]; then kubectl kustomize secrets >/dev/null; fi
+  if [[ -f tests/isolated/kustomization.yaml ]]; then kubectl kustomize tests/isolated >/dev/null; fi
   # Flux creates this Kustomization during bootstrap. An empty or partial
   # flux-system directory is not enough to build the cluster root yet.
   if [[ -f clusters/home/flux-system/kustomization.yaml ]]; then

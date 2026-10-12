@@ -3,6 +3,8 @@
 Run: python3 -m unittest discover -s tests -v
 """
 from pathlib import Path
+import base64
+import json
 import sys
 import unittest
 from unittest.mock import patch
@@ -119,19 +121,78 @@ class FluxArgumentsTests(unittest.TestCase):
                     return b''
 
                 with patch.object(bootstrap, 'capture', side_effect=capture_output), \
-                        patch.object(bootstrap, 'visible') as visible:
+                        patch.object(bootstrap, 'visible') as visible, \
+                        patch.object(bootstrap, 'ensure_secrets_access', create=True):
                     bootstrap.bootstrap_flux(Path('/tmp/test-kubeconfig'), b'test-identity',
                                              'example-owner', 'infra', 'v2.9.6',
-                                             branch=branch, personal=personal)
+                                             branch=branch, personal=personal, private=False,
+                                             secrets_owner='example-owner', secrets_repo='infra-secrets')
                 calls = visible.call_args_list
                 flux_call = next(call for call in calls if call.args[0][:3] == ['flux', 'bootstrap', 'github'])
                 self.assertIn(f'--branch={branch}', flux_call.args[0])
                 self.assertIn(f'--personal={str(personal).lower()}', flux_call.args[0])
                 self.assertIn('--read-write-key=false', flux_call.args[0])
+                self.assertIn('--private=false', flux_call.args[0])
                 self.assertEqual(flux_call.kwargs['env']['GITHUB_TOKEN'], 'unit-test-token')
                 git_call = next(call for call in calls if call.args[0][:2] == ['git', 'pull'])
                 self.assertEqual(git_call.args[0], ['git', 'pull', '--ff-only', 'origin', f'refs/heads/{branch}'])
                 self.assertNotIn('GITHUB_TOKEN', git_call.kwargs['env'])
+
+
+class PrivateSourceTests(unittest.TestCase):
+    def test_public_secrets_repository_is_rejected(self):
+        with patch.object(bootstrap, 'capture', return_value=b'{"private":false,"permissions":{"admin":true}}'):
+            with self.assertRaisesRegex(ValueError, 'private'):
+                bootstrap.private_repository('example-owner', 'infra-secrets')
+
+    def test_existing_key_is_reused_and_read_only_is_required(self):
+        public = 'ssh-ed25519 dGVzdC1wdWJsaWMta2V5 fixture'
+        credentials = {'identity': 'fixture-private-key', 'identity.pub': public,
+                       'known_hosts': 'github.com ssh-ed25519 fixture-host-key'}
+        secret = {'data': {k: base64.b64encode(v.encode()).decode() for k, v in credentials.items()}}
+        for read_only in (True, False):
+            with self.subTest(read_only=read_only):
+                writes = []
+                def fake_capture(args, **kwargs):
+                    if args[:2] == ['gh', 'api']:
+                        if args[-1].endswith('/keys'):
+                            return json.dumps([[{'key': public, 'read_only': read_only}]]).encode()
+                        return b'{"private":true,"permissions":{"admin":true}}'
+                    if 'get' in args:
+                        return json.dumps(secret).encode()
+                    writes.append(args)
+                    return b''
+                with patch.object(bootstrap, 'capture', side_effect=fake_capture):
+                    if read_only:
+                        bootstrap.ensure_secrets_access(['kubectl'], {}, 'example-owner', 'infra-secrets')
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'read.only'):
+                            bootstrap.ensure_secrets_access(['kubectl'], {}, 'example-owner', 'infra-secrets')
+                self.assertEqual(writes, [])
+
+    def test_new_key_is_registered_read_only_and_applied_without_argv_secrets(self):
+        writes = []
+        def fake_capture(args, **kwargs):
+            if args[:2] == ['gh', 'api']:
+                if '--method' in args:
+                    body = json.loads(kwargs['data'])
+                    self.assertTrue(body['read_only'])
+                    self.assertEqual(body['key'], 'ssh-ed25519 fixture-public-key')
+                    return b'{}'
+                return b'{"private":true,"permissions":{"admin":true}}'
+            if args[:4] == ['flux', 'create', 'secret', 'git']:
+                return (b'apiVersion: v1\nkind: Secret\nmetadata:\n  name: infra-secrets\n'
+                        b'  namespace: flux-system\nstringData:\n  identity: fixture-private-key\n'
+                        b'  identity.pub: ssh-ed25519 fixture-public-key\n  known_hosts: github.com fixture\n')
+            if 'get' in args:
+                return b''
+            writes.append((args, kwargs.get('data')))
+            return b''
+        with patch.object(bootstrap, 'capture', side_effect=fake_capture):
+            bootstrap.ensure_secrets_access(['kubectl'], {}, 'example-owner', 'infra-secrets')
+        self.assertEqual(len(writes), 1)
+        self.assertNotIn('fixture-private-key', ' '.join(writes[0][0]))
+        self.assertIn(b'fixture-private-key', writes[0][1])
 
 
 if __name__ == '__main__':

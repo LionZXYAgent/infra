@@ -1,0 +1,4 @@
+[submodule "secrets"]
+	path = secrets
+	url = git@github.com:LionZXYOrg/infra-secrets.git
+	branch = main

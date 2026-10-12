@@ -23,6 +23,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 SECRET_DIR = ROOT / "secrets"
+SOPS_CONFIG = SECRET_DIR / ".sops.yaml"
+RECOVERY_FILE = SECRET_DIR / "bootstrap/sops-age.age"
 NS_DIR = ROOT / "infrastructure/namespaces"
 RESERVED_NS = {"default", "kube-system", "kube-public", "kube-node-lease", "flux-system"}
 PROTECTED = {("flux-system", "sops-age"), ("flux-system", "flux-system")}
@@ -34,6 +36,13 @@ MAX_SIZE = 1024 * 1024
 def require(ok: bool, message: str) -> None:
     if not ok:
         raise ValueError(message)
+
+
+def require_private_module() -> None:
+    require(not SECRET_DIR.is_symlink() and (SECRET_DIR / '.git').is_file()
+            and (SECRET_DIR / '.sops.yaml').is_file()
+            and (SECRET_DIR / 'bootstrap/sops-age.age').is_file(),
+            'Initialize the private secrets submodule: git submodule update --init secrets.')
 
 
 def load_yaml(raw: bytes | str) -> dict:
@@ -98,7 +107,7 @@ def index_value(directory: Path, paths: list[Path]) -> dict:
 def secret_files() -> list[Path]:
     files = sorted(SECRET_DIR.glob("*/*.sops.yaml"))
     for path in SECRET_DIR.rglob("*.yaml"):
-        require(path == SECRET_DIR / "kustomization.yaml" or path in files,
+        require(path in {SECRET_DIR / "kustomization.yaml", SOPS_CONFIG} or path in files,
                 f"Unexpected YAML in secrets/: {relative(path)}")
     return files
 
@@ -168,8 +177,8 @@ def validate(obj: dict, path: Path, *, encrypted: bool) -> None:
 
 def encrypt(obj: dict, path: Path) -> bytes:
     validate(obj, path, encrypted=False)
-    result = run(["sops", "--config", str(ROOT / ".sops.yaml"), "--encrypt",
-                  "--filename-override", relative(path), "--input-type", "yaml",
+    result = run(["sops", "--config", str(SOPS_CONFIG), "--encrypt",
+                  "--filename-override", path.relative_to(SECRET_DIR).as_posix(), "--input-type", "yaml",
                   "--output-type", "yaml", "/dev/stdin"], data=dump(obj))
     validate(load_yaml(result), path, encrypted=True)
     return result
@@ -213,7 +222,7 @@ def identity_env():
         env["SOPS_AGE_KEY_FILE"] = str(key)
         yield env
         return
-    result = subprocess.run(["age", "--decrypt", str(ROOT / "bootstrap/sops-age.age")],
+    result = subprocess.run(["age", "--decrypt", str(RECOVERY_FILE)],
                             stdout=subprocess.PIPE, check=False)
     require(result.returncode == 0, "Could not unlock the recovery identity.")
     env = key_env(result.stdout)
@@ -248,9 +257,12 @@ def changes(args) -> dict[str, str]:
     return result
 
 
-def check_indexes() -> list[Path]:
-    files = secret_files()
-    for directory in (SECRET_DIR, NS_DIR):
+def check_indexes(*, require_secrets: bool = True) -> list[Path]:
+    if require_secrets:
+        require_private_module()
+    files = secret_files() if require_secrets else []
+    directories = (SECRET_DIR, NS_DIR) if require_secrets else (NS_DIR,)
+    for directory in directories:
         p = directory / "kustomization.yaml"
         require(p.is_file() and load_yaml(p.read_bytes()) == load_yaml(index_bytes(directory)),
                 f"Index differs: {relative(p)}; run secretctl.py index.")
@@ -286,6 +298,7 @@ def parser():
         c = sub.add_parser(cmd)
         if cmd == "check":
             c.add_argument("--decrypt", action="store_true")
+            c.add_argument("--public", action="store_true", help="Check public namespaces without private access.")
     return p
 
 
@@ -294,6 +307,10 @@ def main() -> None:
     os.umask(0o077)
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     args = parser().parse_args()
+    public_only = args.command == 'check' and args.public
+    require(not (public_only and args.decrypt), '--public cannot be combined with --decrypt.')
+    if not public_only:
+        require_private_module()
     # RAM/plaintext precautions apply to commands that handle secret values.
     if args.command in {"add", "set"} or (args.command == "check" and args.decrypt):
         plaintext_guard()
@@ -308,7 +325,7 @@ def main() -> None:
             sync_indexes()
             print("Indexes updated. Review and commit the diff.")
         elif args.command in {"list", "check"}:
-            files = check_indexes()
+            files = check_indexes(require_secrets=not public_only)
             if args.command == "list":
                 for p in files:
                     d = load_yaml(p.read_bytes())

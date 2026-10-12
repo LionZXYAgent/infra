@@ -12,7 +12,9 @@ secrets-plain/
 *.swo
 *.bak
 .venv
-# .sops.yaml, *.sops.yaml and bootstrap/sops-age.age MUST be committed.
+# Encrypted secret files and recovery material belong only to the private module.
+/.sops.yaml
+/bootstrap/sops-age.age
 
 # Mine
 .idea

@@ -7,7 +7,8 @@ SOPS encrypts all user-managed secrets with one age key.
 ## Start or restore the cluster
 
 Use a clean Ubuntu 24.04 or Debian server with a fixed LAN IP, cgroup v2, and no swap.
-You need GitHub admin access and the password for `bootstrap/sops-age.age`.
+You need GitHub admin access to both repositories and the password for
+`secrets/bootstrap/sops-age.age`, or the matching local SOPS age identity.
 Use your own checkout and GitHub login, including in a Linux root session.
 
 On Linux, install the tools as root. For a regular account, add `sudo` before each `apt-get` command.
@@ -24,7 +25,7 @@ Run the shared steps on the computer that will start bootstrap:
 ```bash
 gh auth login --hostname github.com --git-protocol https --web --scopes repo
 gh auth setup-git
-gh repo clone LionZXYOrg/infra
+gh repo clone LionZXYOrg/infra -- --recurse-submodules
 cd infra
 python3 -m venv .venv
 source .venv/bin/activate
@@ -48,7 +49,7 @@ SERVER_IP=192.168.1.50 bash scripts/bootstrap.sh --ssh root@192.168.1.50
 Enter the recovery password. The script installs K3s and Flux, then restores services and secrets from Git.
 It detects the owner type and default branch (`master` here).
 For another branch, set `GITHUB_BRANCH` and check out that branch first.
-Commit and push all changes before bootstrap.
+Commit and push all changes in both repositories before bootstrap.
 
 Apply the [K3s network rules](https://docs.k3s.io/installation/requirements#networking). Keep port `6443` private.
 For public access, forward TCP ports `80` and `443` to the server.
@@ -87,9 +88,13 @@ python3 scripts/secretctl.py add myapp myapp-config --prompt API_KEY
 
 Use any namespace, secret name, and field. Use `set` instead of `add` to change an existing secret.
 Never put a password or token in a plain file in Git.
+Before editing secrets, run `git -C secrets switch main` and `git -C secrets pull --ff-only`.
 
 ```bash
 kubectl kustomize apps/myapp >/dev/null
+git -C secrets add .
+git -C secrets commit -m "Add myapp secret" # only if a secret changed
+git -C secrets push
 git add apps/myapp clusters/home infrastructure/namespaces secrets
 bash scripts/check.sh
 git diff --cached
@@ -100,3 +105,20 @@ git push
 If you use a pull request, merge it into the branch that Flux watches.
 Flux applies the change automatically. For errors, run `flux logs --all-namespaces --level=error`.
 Restart affected Pods after a Secret change if they read it through environment variables.
+
+## Private secrets module
+
+`secrets/` is a Git submodule of the private [infra-secrets repository](https://github.com/LionZXYOrg/infra-secrets).
+It contains encrypted Secret manifests, SOPS rules, and the encrypted recovery bundle.
+Flux reads that repository through its own source and read-only deploy key; it does not
+recursively fetch the submodule through the infrastructure source.
+
+For an existing checkout, run `git submodule update --init secrets`. After pulling a
+new module pointer, run `git submodule update secrets`. Secret changes require a
+commit and push inside `secrets/`, followed by a commit of the module pointer here.
+Keep `infra-secrets` private. Never place secret manifests or recovery material in
+this repository, including encrypted copies.
+
+A contributor without private access can clone normally and run `bash scripts/check.sh`
+and `python3 -m unittest discover -s tests -v` after installing the listed tools and
+Python requirements. Secret editing and bootstrap require the private module.

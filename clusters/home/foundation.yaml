@@ -24,13 +24,13 @@ spec:
   interval: 1m
   retryInterval: 30s
   timeout: 5m
-  path: ./secrets
+  path: ./
   prune: true
   deletionPolicy: Orphan
   wait: true
   sourceRef:
     kind: GitRepository
-    name: flux-system
+    name: infra-secrets
   decryption:
     provider: sops
     secretRef:

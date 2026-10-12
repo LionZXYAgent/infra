@@ -3,5 +3,6 @@ kind: Kustomization
 resources:
   - flux-system
   - foundation.yaml
+  - secrets-source.yaml
   - infrastructure.yaml
   - apps.yaml

@@ -42,16 +42,16 @@ def visible(args: list[str], *, env: dict | None = None) -> None:
 
 
 def decrypt_recovery() -> bytes:
+    secretctl.require_private_module()
     secretctl.plaintext_guard()
-    # age reads the passphrase from the terminal; plaintext goes only to this process.
-    p = subprocess.run(['age', '--decrypt', str(ROOT / 'bootstrap/sops-age.age')],
-                       stdout=subprocess.PIPE)
-    require(p.returncode == 0, 'Could not unlock the recovery identity.')
-    identity = p.stdout
+    # An explicit/local identity avoids a recovery password prompt during restores.
+    with secretctl.identity_env() as key_env:
+        identity = (key_env['SOPS_AGE_KEY'].encode() if key_env.get('SOPS_AGE_KEY')
+                    else Path(key_env['SOPS_AGE_KEY_FILE']).read_bytes())
     recipient = capture(['age-keygen', '-y'], data=identity).decode().strip()
-    rules = yaml.safe_load((ROOT / '.sops.yaml').read_text())['creation_rules']
+    rules = secretctl.load_yaml(secretctl.SOPS_CONFIG.read_bytes())['creation_rules']
     require(any(recipient in [x.strip() for x in str(rule.get('age', '')).split(',')] for rule in rules),
-            'Recovery key does not match .sops.yaml.')
+            'Recovery key does not match secrets/.sops.yaml.')
     env = secretctl.key_env(identity)
     for path in secretctl.check_indexes():
         obj = secretctl.load_yaml(capture(['sops', '--decrypt', str(path)], env=env))
@@ -165,8 +165,68 @@ def check_checkout(owner: str, repo: str, branch: str) -> None:
             f'Local {branch} differs from the fetched origin branch.')
 
 
+def private_repository(owner: str, repo: str) -> dict:
+    info = json.loads(capture(['gh', 'api', '--hostname', 'github.com', f'repos/{owner}/{repo}']))
+    require(info.get('private') is True, 'The secrets repository must be private.')
+    require(info.get('permissions', {}).get('admin') is True,
+            'GitHub admin access to the private secrets repository is required for deploy keys.')
+    return info
+
+
+def check_private_checkout(owner: str, repo: str) -> None:
+    secretctl.require_private_module()
+    git = ['git', '-C', str(secretctl.SECRET_DIR)]
+    origin = capture(git + ['remote', 'get-url', 'origin']).decode().strip()
+    require(origin in {f'https://github.com/{owner}/{repo}', f'https://github.com/{owner}/{repo}.git',
+                       f'git@github.com:{owner}/{repo}.git', f'ssh://git@github.com/{owner}/{repo}.git'},
+            'Private module origin does not match the secrets repository settings.')
+    require(not capture(git + ['status', '--porcelain']).strip(),
+            'Commit and push private module changes before bootstrap.')
+    capture(git + ['fetch', 'origin', 'refs/heads/main'])
+    require(capture(git + ['rev-parse', 'HEAD']) == capture(git + ['rev-parse', 'FETCH_HEAD']),
+            'Private module differs from origin/main; update the module and its parent pointer.')
+    source = secretctl.load_yaml((ROOT / 'clusters/home/secrets-source.yaml').read_bytes())
+    require(source.get('spec', {}).get('url') == f'ssh://git@github.com/{owner}/{repo}',
+            'Update clusters/home/secrets-source.yaml to match the secrets repository settings.')
+
+
+def ensure_secrets_access(kube: list[str], env: dict[str, str], owner: str, repo: str) -> None:
+    private_repository(owner, repo)
+    raw = capture(kube + ['-n', 'flux-system', 'get', 'secret', 'infra-secrets',
+                          '--ignore-not-found', '-o', 'json'], env=env)
+    if raw.strip():
+        try:
+            values = {k: base64.b64decode(v, validate=True).decode()
+                      for k, v in json.loads(raw).get('data', {}).items()}
+        except (ValueError, TypeError, UnicodeError):
+            raise ValueError('Invalid Git authentication Secret; contents suppressed.') from None
+        require(all(values.get(k) for k in ('identity', 'identity.pub', 'known_hosts')),
+                'Existing infra-secrets credentials are incomplete; inspect them before retrying.')
+        public = values['identity.pub']
+        pages = json.loads(capture(['gh', 'api', '--hostname', 'github.com', '--paginate', '--slurp',
+                                    f'repos/{owner}/{repo}/keys']))
+        matches = [key for page in pages for key in page
+                   if key.get('key', '').split()[:2] == public.split()[:2]]
+        require(len(matches) == 1 and matches[0].get('read_only') is True,
+                'Existing infra-secrets key must be registered read-only on the private repository.')
+        return
+    raw = capture(['flux', 'create', 'secret', 'git', 'infra-secrets',
+                   f'--url=ssh://git@github.com/{owner}/{repo}', '--ssh-key-algorithm=ed25519',
+                   '--namespace=flux-system', '--export'], env=env)
+    generated = secretctl.load_yaml(raw)
+    public = generated.get('stringData', {}).get('identity.pub')
+    require(isinstance(public, str) and public.startswith('ssh-ed25519 '),
+            'Flux did not generate the expected public deploy key.')
+    payload = {'title': 'infra-secrets ' + public.split()[1][:16], 'key': public, 'read_only': True}
+    capture(['gh', 'api', '--hostname', 'github.com', '--method', 'POST',
+             f'repos/{owner}/{repo}/keys', '--input', '-'], data=json.dumps(payload).encode())
+    capture(kube + ['apply', '--server-side', '--field-manager=home-bootstrap', '-f', '-'],
+            data=raw, env=env)
+
+
 def bootstrap_flux(kubeconfig: Path, identity: bytes, owner: str, repo: str, version: str,
-                   *, branch: str, personal: bool) -> None:
+                   *, branch: str, personal: bool, private: bool,
+                   secrets_owner: str, secrets_repo: str) -> None:
     env = os.environ.copy()
     env['KUBECONFIG'] = str(kubeconfig)
     # No secret env is passed to arbitrary git/ssh processes.
@@ -188,10 +248,11 @@ def bootstrap_flux(kubeconfig: Path, identity: bytes, owner: str, repo: str, ver
               'data': {'identity.agekey': base64.b64encode(identity).decode()}}
     # No --from-literal secret on argv, no plaintext temporary manifest.
     capture(apply, data=json.dumps(secret).encode(), env=env)
+    ensure_secrets_access(kube, env, secrets_owner, secrets_repo)
     token = capture(['gh', 'auth', 'token', '--hostname', 'github.com']).decode().strip()
     flux_env = {**env, 'GITHUB_TOKEN': token}
     visible(['flux', 'bootstrap', 'github', f'--owner={owner}', f'--repository={repo}',
-             f'--personal={str(personal).lower()}', '--private=true', f'--branch={branch}',
+             f'--personal={str(personal).lower()}', f'--private={str(private).lower()}', f'--branch={branch}',
              '--path=clusters/home', f'--version={version}', '--interval=1m', '--token-auth=false',
              '--read-write-key=false', '--ssh-key-algorithm=ed25519'], env=flux_env)
     del flux_env, token
@@ -231,9 +292,15 @@ def main() -> None:
         require(re.fullmatch(r'[A-Za-z0-9._-]+', repo) is not None, 'Invalid repository name.')
         info = json.loads(capture(['gh', 'api', '--hostname', 'github.com', f'repos/{owner}/{repo}']))
         require(info.get('permissions', {}).get('admin') is True, 'GitHub repository admin access is required.')
-        require(info.get('private') is True, 'This guide expects a private GitHub repository.')
+        require(isinstance(info.get('private'), bool), 'Cannot determine infrastructure repository visibility.')
+        secrets_owner, secrets_repo = os.environ['SECRETS_GITHUB_OWNER'], os.environ['SECRETS_GITHUB_REPOSITORY']
+        require(re.fullmatch(r'[A-Za-z0-9-]+', secrets_owner) is not None
+                and re.fullmatch(r'[A-Za-z0-9._-]+', secrets_repo) is not None,
+                'Invalid private secrets repository settings.')
+        private_repository(secrets_owner, secrets_repo)
         branch, personal = repository_target(info, os.environ.get('GITHUB_BRANCH', ''))
         check_checkout(owner, repo, branch)
+        check_private_checkout(secrets_owner, secrets_repo)
         visible(['bash', 'scripts/check.sh'])
         # Unlock and validate before making changes to the target host.
         identity = decrypt_recovery()
@@ -244,7 +311,8 @@ def main() -> None:
                 for a in obj.get('status', {}).get('addresses', [])), 'Node InternalIP does not match SERVER_IP.')
     if identity is not None:
         bootstrap_flux(kubeconfig, identity, owner, repo, os.environ['FLUX_VERSION'],
-                       branch=branch, personal=personal)
+                       branch=branch, personal=personal, private=info['private'],
+                       secrets_owner=secrets_owner, secrets_repo=secrets_repo)
     print('\nReady. In your current terminal run:')
     print('export KUBECONFIG="$HOME/.kube/home-k3s.yaml"')
     print('kubectl config current-context  # expected: home-test')
