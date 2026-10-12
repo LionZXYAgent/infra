@@ -125,3 +125,22 @@ Python requirements. Secret editing and bootstrap require the private module.
 
 See [public-readiness verification](docs/public-readiness.md) for deployment evidence
 and the retained GitHub pull request references to address before publication.
+
+## Pull request checks
+
+GitHub Actions runs `Validate` and `Deployment` for every PR. Validation runs the
+unit tests, public manifest/Kustomize checks, and a redacted public-history secret
+scan. Deployment provisions a fresh K3s server and runs real Flux, Traefik,
+cert-manager, and the demo application with local Git repositories, disposable
+encrypted secrets, and self-signed TLS. It verifies readiness, trusted HTTPS,
+secret updates, and repeat reconciliation. Neither check needs private submodule
+access or repository secrets.
+
+Each code or infrastructure change should add or expand meaningful tests. Describe
+the new cases in the PR; test coverage is a review requirement. Documentation-only
+changes can explain why new tests are not applicable.
+
+Run `python3 -m unittest discover -s tests -v` and `bash scripts/check.sh` locally.
+For the full test, use the [disposable Ubuntu procedure](tests/isolated/README.md).
+The deployment artifact contains only assertion results and allowlisted readiness
+details. Production DNS/ACME and the workstation SSH wrapper are outside its scope.
