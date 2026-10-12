@@ -9,7 +9,6 @@ SOPS encrypts all user-managed secrets with one age key.
 Use a clean Ubuntu 24.04 or Debian server with a fixed LAN IP, cgroup v2, and no swap.
 You need GitHub admin access to both repositories and the password for
 `secrets/bootstrap/sops-age.age`, or the matching local SOPS age identity.
-Use your own checkout and GitHub login, including in a Linux root session.
 
 On Linux, install the tools as root. For a regular account, add `sudo` before each `apt-get` command.
 
@@ -47,7 +46,6 @@ SERVER_IP=192.168.1.50 bash scripts/bootstrap.sh --ssh root@192.168.1.50
 ```
 
 Enter the recovery password. The script installs K3s and Flux, then restores services and secrets from Git.
-It detects the owner type and default branch (`master` here).
 For another branch, set `GITHUB_BRANCH` and check out that branch first.
 Commit and push all changes in both repositories before bootstrap.
 
@@ -68,76 +66,47 @@ Git restores configuration, not databases or stored files. Back up that data sep
 
 ## Add a service
 
-Work in this repository on your Mac or Linux computer. Activate `.venv` and keep `$HOME/.local/bin` in `PATH`.
-Use `myapp` as the example name:
+Use `apps/demo/` as a template for the image, ports, probes, storage, and HTTPS
+route. Add the service's namespace under `infrastructure/namespaces/` and a Flux
+Kustomization under `clusters/home/`; include both in their resource lists.
+Use `myapp.test.kulikov.uk` for the route and `tls: {}` for the shared certificate.
 
-1. Copy `apps/demo/` to `apps/myapp/`. Replace `demo` with `myapp` in the copied files.
-   Set your image, ports, health probes, and storage. Remove Nginx-only files and mounts if they are not needed.
-2. Copy `infrastructure/namespaces/demo.yaml` to `infrastructure/namespaces/myapp.yaml`. Set `metadata.name` to `myapp`.
-   Run `python3 scripts/secretctl.py index` to update the file list.
-3. Copy `clusters/home/apps.yaml` to `clusters/home/myapp.yaml`.
-   Set `metadata.name: myapp` and `spec.path: ./apps/myapp`. Keep `namespace: flux-system` and the dependencies.
-   Add `myapp.yaml` to `resources` in `clusters/home/kustomization.yaml`.
-4. For HTTPS, set the IngressRoute host to `myapp.test.kulikov.uk`. Keep `tls: {}` for the shared certificate.
-5. If the service needs a secret, use the command below. Set its `secretKeyRef` to the matching name and field.
-   Otherwise, remove the copied `secretKeyRef` environment entry from the Deployment.
+If the service needs a secret, update the private module first:
+
+```bash
+git submodule update --init secrets
+git -C secrets switch main
+git -C secrets pull --ff-only
+```
 
 ```bash
 python3 scripts/secretctl.py add myapp myapp-config --prompt API_KEY
 ```
 
-Use any namespace, secret name, and field. Use `set` instead of `add` to change an existing secret.
-Never put a password or token in a plain file in Git.
-Before editing secrets, run `git -C secrets switch main` and `git -C secrets pull --ff-only`.
-
-```bash
-kubectl kustomize apps/myapp >/dev/null
-git -C secrets add .
-git -C secrets commit -m "Add myapp secret" # only if a secret changed
-git -C secrets push
-git add apps/myapp clusters/home infrastructure/namespaces secrets
-bash scripts/check.sh
-git diff --cached
-git commit -m "Add myapp"
-git push
-```
-
-If you use a pull request, merge it into the branch that Flux watches.
-Flux applies the change automatically. For errors, run `flux logs --all-namespaces --level=error`.
+Use `set` instead of `add` to change an existing secret, and reference its name and
+field from the Deployment. Commit and push the private changes before committing
+the updated module pointer here. Validate changes with the commands below and
+merge into `master`; Flux deploys them automatically.
+For errors, run `flux logs --all-namespaces --level=error`.
 Restart affected Pods after a Secret change if they read it through environment variables.
 
 ## Private secrets module
 
 `secrets/` is a Git submodule of the private [infra-secrets repository](https://github.com/LionZXYOrg/infra-secrets).
-It contains encrypted Secret manifests, SOPS rules, and the encrypted recovery bundle.
-Flux reads that repository through its own source and read-only deploy key; it does not
-recursively fetch the submodule through the infrastructure source.
+It contains encrypted Secret manifests and the recovery bundle.
 
 For an existing checkout, run `git submodule update --init secrets`. After pulling a
 new module pointer, run `git submodule update secrets`. Secret changes require a
 commit and push inside `secrets/`, followed by a commit of the module pointer here.
-Keep `infra-secrets` private. Never place secret manifests or recovery material in
-this repository, including encrypted copies.
+Keep real secret files and recovery material in that private repository.
 
-A contributor without private access can clone normally and run `bash scripts/check.sh`
-and `python3 -m unittest discover -s tests -v` after installing the listed tools and
-Python requirements. Secret editing and bootstrap require the private module.
+## Test changes
 
-## Pull request checks
+```bash
+python3 -m unittest discover -s tests -v
+bash scripts/check.sh
+```
 
-GitHub Actions runs `Validate` and `Deployment` for every PR. Validation runs the
-unit tests, public manifest/Kustomize checks, and a redacted public-history secret
-scan. Deployment provisions a fresh K3s server and runs real Flux, Traefik,
-cert-manager, and the demo application with local Git repositories, disposable
-encrypted secrets, and self-signed TLS. It verifies readiness, trusted HTTPS,
-secret updates, and repeat reconciliation. Neither check needs private submodule
-access or repository secrets.
-
-Each code or infrastructure change should add or expand meaningful tests. Describe
-the new cases in the PR; test coverage is a review requirement. Documentation-only
-changes can explain why new tests are not applicable.
-
-Run `python3 -m unittest discover -s tests -v` and `bash scripts/check.sh` locally.
-For the full test, use the [disposable Ubuntu procedure](tests/isolated/README.md).
-The deployment artifact contains only assertion results and allowlisted readiness
-details. Production DNS/ACME and the workstation SSH wrapper are outside its scope.
+These checks work without private repository access. Every PR also runs a fresh
+deployment with disposable secrets and local TLS in GitHub Actions. See the
+[isolated deployment procedure](tests/isolated/README.md) to run it in a VM.
