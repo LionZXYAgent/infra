@@ -4,11 +4,13 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
 export PATH="$HOME/.local/bin:$PATH"
-for script in scripts/*.sh; do bash -n "$script"; done
+for script in scripts/*.sh tests/ci/*.sh; do
+  [[ ! -f $script ]] || bash -n "$script"
+done
 python3 - <<'PY'
 import ast
 from pathlib import Path
-for p in Path('scripts').glob('*.py'):
+for p in list(Path('scripts').glob('*.py')) + list(Path('tests/ci').glob('*.py')):
     ast.parse(p.read_text(), filename=str(p))
 PY
 python3 scripts/secretctl.py check --public
@@ -76,7 +78,9 @@ if command -v kubectl >/dev/null 2>&1; then
     kubectl kustomize "$dir" >/dev/null
   done
   if [[ -f secrets/.git ]]; then kubectl kustomize secrets >/dev/null; fi
-  if [[ -f tests/isolated/kustomization.yaml ]]; then kubectl kustomize tests/isolated >/dev/null; fi
+  for dir in tests/isolated tests/isolated/tls tests/isolated/demo; do
+    [[ ! -f $dir/kustomization.yaml ]] || kubectl kustomize "$dir" >/dev/null
+  done
   # Flux creates this Kustomization during bootstrap. An empty or partial
   # flux-system directory is not enough to build the cluster root yet.
   if [[ -f clusters/home/flux-system/kustomization.yaml ]]; then
