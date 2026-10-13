@@ -74,7 +74,7 @@ for item in paths.split(b'\0'):
 print('Local YAML references and staged Secret manifests checked.')
 PYCHECK
 if command -v kubectl >/dev/null 2>&1; then
-  for dir in infrastructure/namespaces infrastructure/controllers infrastructure/issuers infrastructure/tls apps/demo; do
+  for dir in infrastructure/namespaces infrastructure/controllers infrastructure/issuers infrastructure/tls infrastructure/monitoring/stack infrastructure/monitoring/config apps/demo; do
     kubectl kustomize "$dir" >/dev/null
   done
   if [[ -f secrets/.git ]]; then kubectl kustomize secrets >/dev/null; fi

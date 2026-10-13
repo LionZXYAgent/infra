@@ -14,13 +14,15 @@ import yaml
 if __package__:
     from .fixtures import FixtureSet, command
     from .git_server import GitServer
+    from .monitoring import verify_monitoring, verify_rule_tests
 else:
     from fixtures import FixtureSet, command
     from git_server import GitServer
+    from monitoring import verify_monitoring, verify_rule_tests
 
 
 KUSTOMIZATIONS = ('flux-system', 'infra-namespaces', 'cluster-secrets',
-                  'infra-controllers', 'infra-tls', 'apps')
+                  'infra-controllers', 'infra-tls', 'apps', 'infra-monitoring', 'monitoring-config')
 
 
 def safe_resource_status(objects: list[dict]) -> list[dict]:
@@ -99,11 +101,13 @@ class Deployment:
         for name in ('flux-system', 'infra-secrets'):
             self.wait('gitrepository', name, 'flux-system')
         for name in KUSTOMIZATIONS:
-            self.wait('kustomization', name, 'flux-system', '900s' if name == 'infra-controllers' else '300s')
+            self.wait('kustomization', name, 'flux-system', '900s' if name in {'infra-controllers', 'infra-monitoring'} else '300s')
         for namespace, name in (('traefik', 'traefik'), ('cert-manager', 'cert-manager')):
             self.wait('helmrelease', name, namespace)
         self.wait('certificate', 'isolated-tls', 'traefik')
         self.kube(['-n', 'demo', 'rollout', 'status', 'deployment/demo', '--timeout=180s'])
+        verify_monitoring(self)
+        verify_rule_tests(self)
 
     def passed_check(self, name):
         self.passed.append(name)
@@ -127,6 +131,8 @@ class Deployment:
         self.passed_check('sops-initial-decryption')
         self.verify_https()
         self.passed_check('trusted-https')
+        self.passed_check('monitoring-targets-dashboards-persistence-rules')
+        self.passed_check('monitoring-alert-rule-behaviour')
         self.verify_no_production_resources()
         self.passed_check('production-resources-absent')
         fixture.update_probe(b'isolated-value-two')
