@@ -37,6 +37,19 @@ class MonitoringConfigurationTests(unittest.TestCase):
             self.assertEqual(self.release[operation]['crds'], 'CreateReplace')
         self.assertEqual(self.release['driftDetection']['mode'], 'enabled')
 
+    def test_monitoring_requests_do_not_cap_container_memory(self):
+        def inspect(value):
+            if isinstance(value, dict):
+                if isinstance(value.get('resources'), dict):
+                    resources = value['resources']
+                    self.assertFalse({'cpu', 'memory'} & set(resources.get('limits') or {}))
+                for child in value.values():
+                    inspect(child)
+            elif isinstance(value, list):
+                for child in value:
+                    inspect(child)
+        inspect(self.values)
+
     def test_private_values_are_optional_and_merged_last(self):
         refs = self.release['valuesFrom']
         self.assertEqual(refs[0]['kind'], 'ConfigMap')
@@ -178,15 +191,14 @@ class MonitoringConfigurationTests(unittest.TestCase):
                     if isinstance(obj, dict):
                         self.assertNotEqual(obj.get('kind'), 'Secret')
 
-    def test_resource_requests_and_limits_are_explicit(self):
+    def test_resource_requests_are_explicit(self):
         objects = [self.values['prometheus']['prometheusSpec'],
                    self.values['alertmanager']['alertmanagerSpec'], self.values['grafana'],
                    self.values['prometheusOperator'], self.values['kube-state-metrics'],
                    self.values['prometheus-node-exporter']]
         for obj in objects:
             self.assertRegex(obj['resources']['requests']['cpu'], r'^\d+m$')
-            self.assertRegex(obj['resources']['limits']['memory'], r'^\d+(Mi|Gi)$')
-            self.assertNotIn('cpu', obj['resources']['limits'])
+            self.assertRegex(obj['resources']['requests']['memory'], r'^\d+(Mi|Gi)$')
 
 
 class MonitoringAssertionTests(unittest.TestCase):
