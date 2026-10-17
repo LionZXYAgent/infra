@@ -63,6 +63,7 @@ class DeploymentTests(unittest.TestCase):
 
     def test_deployment_checks_initial_update_and_repeat_reconciliation(self):
         fixture = unittest.mock.Mock(infra_revision='infra-revision', secrets_revision='secret-revision')
+        fixture.infra_path = self.work
         fixture.bootstrap_objects.return_value = []
         with patch.object(self.runner, 'verify_fresh_cluster'), \
                 patch.object(self.runner, 'kube', return_value=b''), \
@@ -82,11 +83,57 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual([call.args[0][2] for call in flux.call_args_list], ['cluster-secrets', 'flux-system'])
         self.assertIn('repeat-reconciliation', report['passed'])
 
+    def test_prepared_migration_must_be_suspended_without_pods_or_releases(self):
+        directory = self.work / 'tests/migrations'
+        directory.mkdir(parents=True)
+        (directory / 'example.yaml').write_text('workloads: 1\n')
+        fixture = unittest.mock.Mock(infra_path=self.work)
+        for suspended, pods, releases in [(True, [], []), (False, [], []),
+                                         (True, [{'metadata': {'name': 'app'}}], []),
+                                         (True, [], [{'metadata': {'name': 'app'}}])]:
+            responses = [json.dumps({'spec': {'suspend': suspended}}).encode(),
+                         json.dumps({'items': pods}).encode(), json.dumps({'items': releases}).encode()]
+            with self.subTest(suspended=suspended, pods=bool(pods), releases=bool(releases)), \
+                    patch.object(self.runner, 'kube', side_effect=responses):
+                if suspended and not pods and not releases:
+                    self.runner.verify_migrations_suspended(fixture)
+                else:
+                    with self.assertRaises(RuntimeError):
+                        self.runner.verify_migrations_suspended(fixture)
+
     def test_acme_issuer_fails_isolation(self):
         issuer = {'items': [{'metadata': {'name': 'production'}, 'spec': {'acme': {'server': 'url'}}}]}
         with patch.object(self.runner, 'kube', return_value=json.dumps(issuer).encode()):
             with self.assertRaisesRegex(RuntimeError, 'production'):
                 self.runner.verify_no_production_resources()
+
+    def test_shared_namespace_is_checked_for_accidental_application_startup(self):
+        directory = self.work / 'tests/migrations'
+        directory.mkdir(parents=True)
+        (directory / 'example.yaml').write_text('workloads: 1\nnamespace: shared\n')
+        fixture = unittest.mock.Mock(infra_path=self.work)
+        responses = [json.dumps({'spec': {'suspend': True}}).encode(),
+                     json.dumps({'items': [{'metadata': {'name': 'app'}}]}).encode(),
+                     json.dumps({'items': []}).encode()]
+        with patch.object(self.runner, 'kube', side_effect=responses) as kube:
+            with self.assertRaisesRegex(RuntimeError, 'started application'):
+                self.runner.verify_migrations_suspended(fixture)
+        self.assertEqual(kube.call_args_list[1].args[0][:2], ['-n', 'shared'])
+        self.assertEqual(kube.call_args_list[2].args[0][:2], ['-n', 'shared'])
+
+    def test_completed_application_must_not_run_in_disposable_cluster(self):
+        directory = self.work / 'tests/migrations'
+        directory.mkdir(parents=True)
+        (directory / 'example.yaml').write_text('phase: active\n')
+        fixture = unittest.mock.Mock(infra_path=self.work)
+        responses = [json.dumps({'items': []}).encode(), json.dumps({'items': []}).encode()]
+        with patch.object(self.runner, 'kube', side_effect=responses) as kube:
+            self.runner.verify_migrations_suspended(fixture)
+        self.assertFalse(any('kustomization' in call.args[0] for call in kube.call_args_list))
+        responses[0] = json.dumps({'items': [{'metadata': {'name': 'production'}}]}).encode()
+        with patch.object(self.runner, 'kube', side_effect=responses):
+            with self.assertRaisesRegex(RuntimeError, 'started application'):
+                self.runner.verify_migrations_suspended(fixture)
 
     def test_production_certificate_and_cloudflare_secret_fail_isolation(self):
         for certificate, secret in (({'metadata': {'name': 'wildcard', 'namespace': 'traefik'}}, None),

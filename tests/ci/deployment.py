@@ -109,6 +109,20 @@ class Deployment:
         verify_monitoring(self)
         verify_rule_tests(self)
 
+    def verify_migrations_suspended(self, fixture):
+        for contract in sorted((fixture.infra_path / 'tests/migrations').glob('*.yaml')):
+            name = contract.stem
+            configuration = yaml.safe_load(contract.read_text())
+            namespace = configuration.get('namespace', name)
+            if configuration.get('phase', 'prepared') != 'active':
+                obj = json.loads(self.kube(['-n', 'flux-system', 'get', 'kustomization', name, '-o', 'json']))
+                if obj['spec'].get('suspend') is not True:
+                    raise RuntimeError('Prepared migration became active')
+            pods = json.loads(self.kube(['-n', namespace, 'get', 'pods', '-o', 'json']))['items']
+            releases = json.loads(self.kube(['-n', namespace, 'get', 'helmreleases', '-o', 'json']))['items']
+            if pods or releases:
+                raise RuntimeError('Prepared migration started application resources')
+
     def passed_check(self, name):
         self.passed.append(name)
         print(f'PASS: {name}', flush=True)
@@ -135,6 +149,8 @@ class Deployment:
         self.passed_check('monitoring-alert-rule-behaviour')
         self.verify_no_production_resources()
         self.passed_check('production-resources-absent')
+        self.verify_migrations_suspended(fixture)
+        self.passed_check('migration-preparations-suspended-without-workloads')
         fixture.update_probe(b'isolated-value-two')
         self.flux(['reconcile', 'kustomization', 'cluster-secrets', '--with-source', '--timeout=5m'])
         self.verify_probe(b'isolated-value-two')
@@ -143,6 +159,7 @@ class Deployment:
         self.verify_ready()
         self.verify_https()
         self.verify_no_production_resources()
+        self.verify_migrations_suspended(fixture)
         self.passed_check('repeat-reconciliation')
         return {'passed': list(self.passed), 'infra_fixture_revision': fixture.infra_revision,
                 'secrets_fixture_revision': fixture.secrets_revision}
