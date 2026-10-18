@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 import yaml
-from ci import monitoring
+from ci import deployment, monitoring
 
 ROOT = Path(__file__).resolve().parents[1]
 STACK = ROOT / 'infrastructure/monitoring/stack'
@@ -79,6 +79,10 @@ class MonitoringConfigurationTests(unittest.TestCase):
                          (ROOT / 'tests/isolated/monitoring.yaml').read_text())
         for folder in ('clusters/home', 'tests/isolated', 'infrastructure/namespaces'):
             self.assertIn('monitoring.yaml', load(ROOT / folder / 'kustomization.yaml')['resources'])
+
+    def test_deployment_waits_for_monitoring_and_mcp_layers(self):
+        self.assertTrue({'infra-monitoring', 'monitoring-config',
+                         'cluster-mcp-rbac', 'cluster-mcp-endpoint'} <= set(deployment.KUSTOMIZATIONS))
 
     def test_all_services_are_private_and_grafana_requires_login(self):
         for app in ('prometheus', 'grafana', 'alertmanager'):
