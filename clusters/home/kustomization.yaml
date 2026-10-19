@@ -10,3 +10,4 @@ resources:
   - immich.yaml
   - warden.yaml
   - homeassist.yaml
+  - acorn-care-bot.yaml
