@@ -4,9 +4,11 @@ resources:
 - acorn-care-bot.yaml
 - birthday-reminder.yaml
 - cert-manager.yaml
-- demo.yaml
 - homeassist.yaml
 - immich.yaml
 - k3s-mcp.yaml
+- obsidian.yaml
+- psybot.yaml
+- replacevowelbot.yaml
 - traefik.yaml
 - warden.yaml

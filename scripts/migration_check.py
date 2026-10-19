@@ -77,7 +77,7 @@ def check_preparation(root, name, contract, objects):
                     f'{name}: PVC is not protected from Flux pruning')
         if o['kind'] == 'IngressRoute':
             require(o['spec']['entryPoints'] == ['websecure'] and 'tls' in o['spec'], f'{name}: route lacks TLS')
-            hostname = 'warden.lionzxy.ru' if name == 'warden' else f'{name}.kulikov.uk'
+            hostname = {'warden': 'warden.lionzxy.ru', 'homeassist': 'ha.kulikov.uk'}.get(name, f'{name}.kulikov.uk')
             require(f"Host(`{hostname}`)" == o['spec']['routes'][0]['match'],
                     f'{name}: route must use the {hostname} host')
     instructions = root / 'apps' / name / 'MIGRATION.md'

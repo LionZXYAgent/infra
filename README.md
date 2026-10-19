@@ -59,16 +59,15 @@ flux get kustomizations -A
 kubectl get nodes
 ```
 
-Open `https://demo.kulikov.uk`.
 The kubeconfig file gives you cluster access. To fetch only that file, add `--fetch-kubeconfig` to the bootstrap command.
 Do not replace the recovery key during a restore. Back up its password outside Git.
 Git restores configuration, not databases or stored files. Back up that data separately.
 
 ## Add a service
 
-Use `apps/demo/` as a template for the image, ports, probes, storage, and HTTPS
-route. Add the service's namespace under `infrastructure/namespaces/` and a Flux
-Kustomization under `clusters/home/`; include both in their resource lists.
+Create the service under `apps/` with its image, ports, health probes, storage, and HTTPS route.
+Add its namespace under `infrastructure/namespaces/` and a Flux Kustomization under `clusters/home/`.
+Include both files in their resource lists.
 Use `myapp.kulikov.uk` for the route and `tls: {}` for the shared certificate.
 
 If the service needs a secret, update the private module first:
@@ -225,6 +224,14 @@ Before activation, prepare the following resources in the private secrets module
    python3 scripts/secretctl.py add acorn-care-bot acorn-care-bot \
      --prompt bot-token --prompt chat-id --prompt topic-id \
      --prompt allowed-user-ids \
+     --file config.json=/absolute/protected/path/acorn-config.json
+   ```
+
+   If the Secret already contains `bot-token`, preserve it and add the remaining values:
+
+   ```bash
+   python3 scripts/secretctl.py set acorn-care-bot acorn-care-bot \
+     --prompt chat-id --prompt topic-id --prompt allowed-user-ids \
      --file config.json=/absolute/protected/path/acorn-config.json
    ```
 

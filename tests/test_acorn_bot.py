@@ -98,6 +98,24 @@ class AcornManifestTests(unittest.TestCase):
         self.assertIn('acorn-care-bot.yaml', read(ROOT / 'clusters/home/kustomization.yaml')['resources'])
         self.assertEqual(read(APP / 'kustomization.yaml')['namespace'], 'acorn-care-bot')
 
+    def test_secret_namespace_dependencies_do_not_enable_other_applications(self):
+        namespaces = read(ROOT / 'infrastructure/namespaces/kustomization.yaml')['resources']
+        applications = read(ROOT / 'clusters/home/kustomization.yaml')['resources']
+        for name in ('obsidian', 'psybot', 'replacevowelbot'):
+            with self.subTest(namespace=name):
+                self.assertIn(f'{name}.yaml', namespaces)
+                namespace = read(ROOT / f'infrastructure/namespaces/{name}.yaml')
+                self.assertEqual(namespace, {'apiVersion': 'v1', 'kind': 'Namespace',
+                                             'metadata': {'name': name}})
+                self.assertNotIn(f'{name}.yaml', applications)
+
+    def test_cluster_keeps_home_assistant_and_the_suspended_bot(self):
+        applications = read(ROOT / 'clusters/home/kustomization.yaml')['resources']
+        self.assertIn('homeassist.yaml', applications)
+        self.assertIn('acorn-care-bot.yaml', applications)
+        self.assertNotIn('apps.yaml', applications)
+        self.assertFalse((ROOT / 'apps/demo').exists())
+
     @unittest.skipUnless(shutil.which('kubectl'), 'kubectl required')
     def test_rendered_resources_are_namespaced_and_do_not_include_credentials(self):
         raw = subprocess.check_output(['kubectl', 'kustomize', str(APP)])
