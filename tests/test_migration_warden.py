@@ -30,10 +30,23 @@ class MigrationTests(unittest.TestCase):
             self.assertEqual(v[integration]['existingSecret'], 'warden-config')
         self.assertEqual(v['storage']['existingVolumeClaim']['dataPath'], '/data')
 
-    @unittest.skipUnless((APP / 'MIGRATION.md').exists(), 'Migration completed')
-    def test_restore_helper_uses_only_declared_pvcs_and_no_cluster_credentials(self):
-        helper = load('restore-pod.yaml')['spec']
-        declared = {v['metadata']['name'] for v in yaml.safe_load_all((APP / 'storage.yaml').read_text())}
-        self.assertEqual({v['persistentVolumeClaim']['claimName'] for v in helper['volumes']}, declared)
-        self.assertFalse(helper['automountServiceAccountToken'])
-        self.assertFalse(helper.get('hostNetwork', False))
+    def test_completed_migration_is_active_without_restore_helpers(self):
+        contract = yaml.safe_load((ROOT / 'tests/migrations/warden.yaml').read_text())
+        flux = yaml.safe_load((ROOT / 'clusters/home/warden.yaml').read_text())
+        self.assertEqual(contract['phase'], 'active')
+        self.assertIs(flux['spec']['suspend'], False)
+        self.assertIs(release('warden')['spec']['suspend'], False)
+        self.assertFalse((APP / 'MIGRATION.md').exists())
+        self.assertFalse(list(APP.glob('restore*.yaml')))
+
+    def test_retained_storage_preserves_restored_vault_data(self):
+        claim = load('storage.yaml')
+        self.assertEqual(claim['metadata']['name'], 'warden-data')
+        self.assertEqual(claim['metadata']['annotations']['kustomize.toolkit.fluxcd.io/prune'], 'disabled')
+        self.assertEqual(claim['spec']['resources']['requests']['storage'], '10Gi')
+        self.assertEqual(claim['spec']['storageClassName'], 'local-path')
+        self.assertEqual(claim['spec']['accessModes'], ['ReadWriteOnce'])
+        self.assertEqual(load('kustomization.yaml')['namespace'], 'warden')
+        self.assertIn('storage.yaml', load('kustomization.yaml')['resources'])
+        self.assertEqual(release('warden')['spec']['values']['storage']['existingVolumeClaim'],
+                         {'claimName': claim['metadata']['name'], 'dataPath': '/data'})

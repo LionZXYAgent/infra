@@ -13,3 +13,4 @@ secrets:
 - warden-config
 mounts:
 - /data
+phase: active
