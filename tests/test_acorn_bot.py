@@ -1,4 +1,4 @@
-"""Separate public care settings from credentials and preserve activation guards."""
+"""Activate one public-image bot and keep production workloads out of CI."""
 import json
 from pathlib import Path
 import shutil
@@ -27,10 +27,10 @@ class AcornManifestTests(unittest.TestCase):
         self.pod = self.spec['template']['spec']
         self.container = self.pod['containers'][0]
 
-    def test_two_independent_activation_guards_and_dependencies(self):
+    def test_activation_keeps_one_replica_and_existing_dependencies(self):
         flux = read(ROOT / 'clusters/home/acorn-care-bot.yaml')['spec']
-        self.assertIs(flux['suspend'], True)
-        self.assertEqual(self.spec['replicas'], 0)
+        self.assertIs(flux['suspend'], False)
+        self.assertEqual(self.spec['replicas'], 1)
         self.assertEqual({x['name'] for x in flux['dependsOn']}, {'infra-namespaces', 'cluster-secrets'})
         self.assertEqual(flux['path'], './apps/acorn-care-bot')
         self.assertEqual(flux['deletionPolicy'], 'Orphan')
@@ -99,10 +99,12 @@ class AcornManifestTests(unittest.TestCase):
             self.assertNotIn(key, config)
         self.assertFalse(any('token' in key.lower() or 'password' in key.lower() for key in values))
 
-    def test_single_writer_with_retained_state_and_private_image(self):
+    def test_single_writer_with_retained_state_and_public_pinned_image(self):
         self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
-        self.assertEqual(self.pod['imagePullSecrets'], [{'name': 'ghcr-auth'}])
-        self.assertRegex(self.container['image'], r'^ghcr\.io/lionzxyorg/acorn-care-bot:sha-[a-f0-9]{40}$')
+        self.assertNotIn('imagePullSecrets', self.pod)
+        self.assertEqual(self.container['image'],
+                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-38afbc7f99626f7dff50d031054143ef08d8ee0a'
+                         '@sha256:5047d5edf63a9bb13d5445c2374b36d1443b0f5712de192d1541bd3c1aec9dea')
         volume = read(APP / 'storage.yaml')
         self.assertEqual(volume['metadata']['name'], 'acorn-care-bot-state')
         self.assertEqual(volume['spec']['accessModes'], ['ReadWriteOnce'])
@@ -152,7 +154,7 @@ class AcornManifestTests(unittest.TestCase):
                                              'metadata': {'name': name}})
                 self.assertNotIn(f'{name}.yaml', applications)
 
-    def test_cluster_keeps_home_assistant_and_the_suspended_bot(self):
+    def test_cluster_keeps_home_assistant_and_the_bot(self):
         applications = read(ROOT / 'clusters/home/kustomization.yaml')['resources']
         self.assertIn('homeassist.yaml', applications)
         self.assertIn('acorn-care-bot.yaml', applications)
@@ -220,9 +222,20 @@ class AcornIsolationTests(unittest.TestCase):
         self.assertEqual(configuration['resources'], ['foundation.yaml', 'acorn-care-bot.yaml'])
         self.assertEqual((self.isolated.parent / 'acorn-care-bot.yaml').read_text(), self.source.read_text())
         self.assertFalse((self.isolated.parent / 'apps').exists())
+
+    def test_fixture_excludes_active_production_application(self):
         self.source.write_text('spec: {suspend: false}\n')
-        with self.assertRaisesRegex(ValueError, 'active application'):
-            include_suspended_application(self.work, self.isolated, configuration, 'acorn-care-bot')
+        configuration = {'resources': ['foundation.yaml']}
+        include_suspended_application(self.work, self.isolated, configuration, 'acorn-care-bot')
+        self.assertEqual(configuration['resources'], ['foundation.yaml'])
+        self.assertFalse((self.isolated.parent / 'acorn-care-bot.yaml').exists())
+        self.assertFalse((self.isolated.parent / 'apps').exists())
+
+    def test_fixture_rejects_ambiguous_suspension(self):
+        for value in ('null', '"false"', '0'):
+            self.source.write_text('spec: {suspend: ' + value + '}\n')
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'boolean suspension'):
+                include_suspended_application(self.work, self.isolated, {'resources': []}, 'acorn-care-bot')
 
     def test_disposable_runner_checks_the_renamed_application(self):
         runner = deployment.Deployment(self.work / 'kubeconfig', '192.0.2.10', self.work / 'report')
@@ -242,6 +255,20 @@ class AcornIsolationTests(unittest.TestCase):
                 else:
                     with self.assertRaises(RuntimeError):
                         runner.verify_suspended_application(Mock(infra_path=self.work), 'acorn-care-bot')
+
+    def test_active_production_application_and_workloads_must_stay_absent(self):
+        self.source.write_text('spec: {suspend: false}\n')
+        runner = deployment.Deployment(self.work / 'kubeconfig', '192.0.2.10', self.work / 'report')
+        for objects, workloads in [([], []), ([{'kind': 'Kustomization'}], []),
+                                   ([], [{'kind': 'Pod'}]), ([], [{'kind': 'Deployment'}]),
+                                   ([], [{'kind': 'StatefulSet'}]), ([], [{'kind': 'Job'}])]:
+            responses = [json.dumps({'items': objects}).encode(), json.dumps({'items': workloads}).encode()]
+            with self.subTest(objects=objects, workloads=workloads), patch.object(runner, 'kube', side_effect=responses):
+                if objects or workloads:
+                    with self.assertRaises(RuntimeError):
+                        runner.verify_suspended_application(Mock(infra_path=self.work), 'acorn-care-bot')
+                else:
+                    runner.verify_suspended_application(Mock(infra_path=self.work), 'acorn-care-bot')
 
 
 if __name__ == '__main__':

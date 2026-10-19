@@ -3,8 +3,8 @@ kind: Deployment
 metadata:
   name: acorn-care-bot
 spec:
-  # Activation requires registry access and a coordinated stop of the old scheduler.
-  replicas: 0
+  # Stop the old reminder scheduler before this activation reaches master.
+  replicas: 1
   revisionHistoryLimit: 2
   strategy:
     type: Recreate
@@ -26,11 +26,9 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
-      imagePullSecrets:
-        - name: ghcr-auth
       containers:
         - name: bot
-          image: ghcr.io/lionzxyorg/acorn-care-bot:sha-38afbc7f99626f7dff50d031054143ef08d8ee0a
+          image: ghcr.io/lionzxyorg/acorn-care-bot:sha-38afbc7f99626f7dff50d031054143ef08d8ee0a@sha256:5047d5edf63a9bb13d5445c2374b36d1443b0f5712de192d1541bd3c1aec9dea
           imagePullPolicy: IfNotPresent
           env:
             - name: TELEGRAM_BOT_TOKEN_FILE
