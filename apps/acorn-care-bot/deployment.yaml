@@ -30,7 +30,7 @@ spec:
         - name: ghcr-auth
       containers:
         - name: bot
-          image: ghcr.io/lionzxyorg/acorn-care-bot:sha-f25290ffb0814a2e3fc03272b27d33e566da9d6e
+          image: ghcr.io/lionzxyorg/acorn-care-bot:sha-899c109293fa13796b91c03fa0a6c96d1cda267d
           imagePullPolicy: IfNotPresent
           env:
             - name: TELEGRAM_BOT_TOKEN_FILE
