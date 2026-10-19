@@ -11,3 +11,4 @@ resources:
   - warden.yaml
   - homeassist.yaml
   - acorn-care-bot.yaml
+  - copyparty.yaml
