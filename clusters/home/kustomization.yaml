@@ -10,3 +10,4 @@ resources:
   - apps.yaml
   - immich.yaml
   - warden.yaml
+  - ekorn-care-bot.yaml

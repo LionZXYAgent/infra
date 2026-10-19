@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ekorn-care-bot
+spec:
+  # Activation is a separate change after the token and state migration are ready.
+  replicas: 0
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ekorn-care-bot
+  template:
+    metadata:
+      labels:
+        app: ekorn-care-bot
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 75
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-auth
+      containers:
+        - name: bot
+          image: ghcr.io/lionzxyorg/ekorn-care-bot:sha-f25290ffb0814a2e3fc03272b27d33e566da9d6e
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TELEGRAM_BOT_TOKEN_FILE
+              value: /var/run/ekorn/token
+            - name: EKORN_CONFIG_PATH
+              value: /var/run/ekorn/config.json
+            - name: EKORN_STATE_PATH
+              value: /data/state.json
+            - name: TELEGRAM_CHAT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ekorn-care-bot
+                  key: chat-id
+            - name: TELEGRAM_TOPIC_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ekorn-care-bot
+                  key: topic-id
+            - name: TELEGRAM_ALLOWED_USER_IDS
+              valueFrom:
+                secretKeyRef:
+                  name: ekorn-care-bot
+                  key: allowed-user-ids
+          ports:
+            - name: health
+              containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /livez
+              port: health
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: health
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          volumeMounts:
+            - name: state
+              mountPath: /data
+            - name: configuration
+              mountPath: /var/run/ekorn
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: ekorn-care-bot-state
+        - name: configuration
+          secret:
+            secretName: ekorn-care-bot
+            defaultMode: 0440
+            items:
+              - key: bot-token
+                path: token
+              - key: config.json
+                path: config.json
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
