@@ -205,39 +205,33 @@ deployment with disposable secrets and local TLS in GitHub Actions. See the
 
 The [separate bot repository](https://github.com/LionZXYOrg/acorn-care-bot) contains the application and its image build.
 The bot sends shared care reminders to one Telegram topic.
-It records each caregiver confirmation before it answers a button press.
+It saves each caregiver confirmation before it answers a button press.
 The planned meal times are `07:00`, `14:00`, and `19:00` in `Europe/London`.
 Wet food uses can fractions. Dry food uses grams.
 
-This change does not start the bot. The Flux object is suspended, and the Deployment has zero replicas.
-The existing reminders remain responsible for care until a separate cutover.
-Do not start both services. Two reminder services can ask caregivers to issue the same portion twice.
-No token, Telegram identifiers, caregiver identifiers, or private configuration belongs in this public repository.
+The owners approved public storage of the chat, topic, caregiver IDs, and recurring care plan.
+`apps/acorn-care-bot/runtime.properties` contains the Telegram destination, numeric caregiver IDs, and the fresh-start setting.
+`apps/acorn-care-bot/config.json` contains the approved portions, stage dates, caregiver mentions, and `add_full` transfer policy.
+The morning time applies from `2026-10-20`. This configuration does not recreate the earlier breakfast on `2026-10-19`.
+The Deployment reads these files through a generated ConfigMap, a Kubernetes object for nonsecret configuration.
+A change to either file changes the ConfigMap name and the Deployment references.
 
-Before activation, prepare the following resources in the private secrets module:
+Keep bot tokens and registry credentials in the private secrets module.
+Do not add them to either public configuration file.
+The application Secret needs only the existing `bot-token` key.
+The Deployment mounts that key separately from the public configuration.
+Numeric caregiver IDs still control access. A displayed username does not grant access.
 
-1. Create a protected copy of `config.example.json` from the bot repository outside this public checkout.
-2. Set its caregiver mentions and make sure that its portions match the approved plan.
-3. Create the application Secret with protected prompts and that file:
+This change keeps the Flux object suspended and the Deployment at zero replicas.
+The existing reminders remain responsible for care until activation.
+Do not run both reminder services. Duplicate requests can cause caregivers to issue the same portion twice.
 
-   ```bash
-   python3 scripts/secretctl.py add acorn-care-bot acorn-care-bot \
-     --prompt bot-token --prompt chat-id --prompt topic-id \
-     --prompt allowed-user-ids \
-     --file config.json=/absolute/protected/path/acorn-config.json
-   ```
+Before activation, prepare the remaining access:
 
-   If the Secret already contains `bot-token`, preserve it and add the remaining values:
-
-   ```bash
-   python3 scripts/secretctl.py set acorn-care-bot acorn-care-bot \
-     --prompt chat-id --prompt topic-id --prompt allowed-user-ids \
-     --file config.json=/absolute/protected/path/acorn-config.json
-   ```
-
-4. Enter a comma-separated list of numeric caregiver IDs for `allowed-user-ids`.
-5. Give the new bot access to the target group and topic.
-6. For the private image, create a registry Secret from a protected Docker authentication file:
+1. If the application Secret is absent, create it with `python3 scripts/secretctl.py add acorn-care-bot acorn-care-bot --prompt bot-token`.
+2. If `bot-token` already exists, preserve it. No additional application Secret keys are required.
+3. Give the new bot access to the configured Telegram group and topic.
+4. For the private image, create `ghcr-auth` from a protected Docker authentication file:
 
    ```bash
    python3 scripts/secretctl.py add acorn-care-bot ghcr-auth \
@@ -245,28 +239,39 @@ Before activation, prepare the following resources in the private secrets module
      --file .dockerconfigjson=/absolute/protected/path/ghcr-auth.json
    ```
 
-7. Commit and push the private changes before updating the public submodule pointer.
-8. Make sure that the pinned image build succeeds before activation.
+5. Commit and push private changes before updating the public submodule pointer.
+6. Make sure that the pinned application image passes its tests and finishes publication.
 
-Use a new Telegram bot token. Do not reuse the assistant token or change its Telegram listener.
-Keep the public Deployment reference pinned to the tested application commit.
-The private image needs registry access with the `read:packages` permission.
-If the image becomes public, remove `imagePullSecrets` in a reviewed change.
+Use a separate bot token. Do not reuse the assistant token or change its Telegram listener.
+Keep the image reference pinned to the tested application commit.
+The private image requires registry access with `read:packages` permission.
+If the image becomes public through a separate approved change, remove `imagePullSecrets` in that change.
 The bot needs outbound HTTPS, not a public HTTP route.
-Its health endpoints remain inside the cluster.
+Its health endpoints stay inside the cluster.
 
-Before starting the new bot, stop the old care scheduler and export its shared record through a protected channel.
-Follow the bot repository's migration procedure to preserve portions, task states, caregiver provenance, and health holds.
-Do not commit that record or copy its old bot message identifiers into new active panels.
-The new service stores its record at `/data/state.json` on the `acorn-care-bot-state` volume.
-The volume survives Flux pruning. It still needs a separate backup.
+The owners requested a fresh record without importing existing confirmations or queued transfers.
+`ACORN_FRESH_START=1` selects this mode for the first start on an empty volume.
+The bot records its startup time and creates checklists only for later planned care times.
+It does not replay earlier feedings or change the recurring portions and stage dates.
+On restart, it keeps that original cutoff and all records that the new bot creates.
+This setting never resets an existing volume.
 
-After the state and secrets are ready, change the Deployment to one replica and remove the Flux suspension in one reviewed change.
-Use `Recreate` so that only one process writes the shared record.
+Stop the old care scheduler before activating the new bot.
+Keep the old record unchanged as an archive. Do not import its marks, transfers, or Telegram message bindings.
+If a later cutover requires history, follow the bot repository's explicit migration procedure instead of the fresh-start mode.
+A health-related hold needs separate review before a fresh start. Do not discard an active hold.
+The new service saves its record at `/data/state.json` on the `acorn-care-bot-state` volume.
+The volume survives Flux pruning and needs a separate backup.
+
+After registry access is ready, set one replica and remove Flux suspension in one reviewed activation change.
+Use `Recreate` so that only one process writes the record.
 Do not scale the bot above one replica.
+Make sure that `/readyz` succeeds and test one confirmation with the new bot.
+If startup fails, stop the new bot before resuming the old scheduler.
 A local-path volume stays on its original node. Follow the cluster backup procedure before moving it.
 
-Public tests render the application and exercise its security, Secret references, storage, and two activation guards.
+Public tests render the ConfigMap, Secret references, storage, and activation guards.
+They also exercise configuration-name changes without contacting Telegram or reading credentials.
 The disposable deployment test includes the suspended Flux object and rejects any bot workload that starts there.
-It does not contact Telegram, pull the private image, or use real caregiver data.
-An end-to-end test with the new bot remains necessary after the owner supplies its token.
+It does not pull the private image or use live care records.
+A real Telegram confirmation test remains part of activation, not a public CI test.
