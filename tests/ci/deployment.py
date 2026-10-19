@@ -129,9 +129,16 @@ class Deployment:
         source = fixture.infra_path / 'clusters/home' / (name + '.yaml')
         if not source.exists():
             return
-        obj = json.loads(self.kube(['-n', 'flux-system', 'get', 'kustomization', name, '-o', 'json']))
-        if obj['spec'].get('suspend') is not True:
-            raise RuntimeError('Prepared application became active')
+        configuration = yaml.safe_load(source.read_text())
+        if configuration['spec'].get('suspend') is False:
+            objects = json.loads(self.kube(['-n', 'flux-system', 'get', 'kustomizations',
+                '--field-selector=metadata.name=' + name, '-o', 'json']))
+            if objects['items']:
+                raise RuntimeError('Active production application entered the disposable cluster')
+        else:
+            obj = json.loads(self.kube(['-n', 'flux-system', 'get', 'kustomization', name, '-o', 'json']))
+            if obj['spec'].get('suspend') is not True:
+                raise RuntimeError('Prepared application became active')
         resources = json.loads(self.kube(['-n', name, 'get', 'pods,deployments,statefulsets,jobs', '-o', 'json']))
         if resources['items']:
             raise RuntimeError('Prepared application started workloads')

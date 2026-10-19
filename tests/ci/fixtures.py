@@ -63,13 +63,16 @@ def commit(repo: Path, message: str) -> str:
 
 
 def include_suspended_application(infra, isolated_root, isolated, name):
-    """Copy only a suspended Flux object, never its application resources."""
+    """Copy a prepared Flux object. Exclude active production applications."""
     source = infra / 'clusters/home' / (name + '.yaml')
     if not source.exists():
         return
     manifest = yaml.safe_load(source.read_text())
-    if manifest['spec'].get('suspend') is not True:
-        raise ValueError('Refusing an active application in disposable preparation tests')
+    suspended = manifest['spec'].get('suspend')
+    if suspended is False:
+        return
+    if suspended is not True:
+        raise ValueError('Application requires an explicit boolean suspension setting')
     destination = name + '.yaml'
     (isolated_root.parent / destination).write_bytes(source.read_bytes())
     isolated['resources'].append(destination)
