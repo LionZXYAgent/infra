@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ekorn-care-bot
+  name: acorn-care-bot
 spec:
   # Activation is a separate change after the token and state migration are ready.
   replicas: 0
@@ -10,11 +10,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: ekorn-care-bot
+      app: acorn-care-bot
   template:
     metadata:
       labels:
-        app: ekorn-care-bot
+        app: acorn-care-bot
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 75
@@ -30,29 +30,29 @@ spec:
         - name: ghcr-auth
       containers:
         - name: bot
-          image: ghcr.io/lionzxyorg/ekorn-care-bot:sha-f25290ffb0814a2e3fc03272b27d33e566da9d6e
+          image: ghcr.io/lionzxyorg/acorn-care-bot:sha-f25290ffb0814a2e3fc03272b27d33e566da9d6e
           imagePullPolicy: IfNotPresent
           env:
             - name: TELEGRAM_BOT_TOKEN_FILE
-              value: /var/run/ekorn/token
-            - name: EKORN_CONFIG_PATH
-              value: /var/run/ekorn/config.json
-            - name: EKORN_STATE_PATH
+              value: /var/run/acorn/token
+            - name: ACORN_CONFIG_PATH
+              value: /var/run/acorn/config.json
+            - name: ACORN_STATE_PATH
               value: /data/state.json
             - name: TELEGRAM_CHAT_ID
               valueFrom:
                 secretKeyRef:
-                  name: ekorn-care-bot
+                  name: acorn-care-bot
                   key: chat-id
             - name: TELEGRAM_TOPIC_ID
               valueFrom:
                 secretKeyRef:
-                  name: ekorn-care-bot
+                  name: acorn-care-bot
                   key: topic-id
             - name: TELEGRAM_ALLOWED_USER_IDS
               valueFrom:
                 secretKeyRef:
-                  name: ekorn-care-bot
+                  name: acorn-care-bot
                   key: allowed-user-ids
           ports:
             - name: health
@@ -89,17 +89,17 @@ spec:
             - name: state
               mountPath: /data
             - name: configuration
-              mountPath: /var/run/ekorn
+              mountPath: /var/run/acorn
               readOnly: true
             - name: tmp
               mountPath: /tmp
       volumes:
         - name: state
           persistentVolumeClaim:
-            claimName: ekorn-care-bot-state
+            claimName: acorn-care-bot-state
         - name: configuration
           secret:
-            secretName: ekorn-care-bot
+            secretName: acorn-care-bot
             defaultMode: 0440
             items:
               - key: bot-token

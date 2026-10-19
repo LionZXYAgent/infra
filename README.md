@@ -202,9 +202,9 @@ These checks work without private repository access. Every PR also runs a fresh
 deployment with disposable secrets and local TLS in GitHub Actions. See the
 [isolated deployment procedure](tests/isolated/README.md) to run it in a VM.
 
-## Ekorn care bot
+## Acorn care bot
 
-The [separate bot repository](https://github.com/LionZXYOrg/ekorn-care-bot) contains the application and its image build.
+The [separate bot repository](https://github.com/LionZXYOrg/acorn-care-bot) contains the application and its image build.
 The bot sends shared care reminders to one Telegram topic.
 It records each caregiver confirmation before it answers a button press.
 The planned meal times are `07:00`, `14:00`, and `19:00` in `Europe/London`.
@@ -222,10 +222,10 @@ Before activation, prepare the following resources in the private secrets module
 3. Create the application Secret with protected prompts and that file:
 
    ```bash
-   python3 scripts/secretctl.py add ekorn-care-bot ekorn-care-bot \
+   python3 scripts/secretctl.py add acorn-care-bot acorn-care-bot \
      --prompt bot-token --prompt chat-id --prompt topic-id \
      --prompt allowed-user-ids \
-     --file config.json=/absolute/protected/path/ekorn-config.json
+     --file config.json=/absolute/protected/path/acorn-config.json
    ```
 
 4. Enter a comma-separated list of numeric caregiver IDs for `allowed-user-ids`.
@@ -233,7 +233,7 @@ Before activation, prepare the following resources in the private secrets module
 6. For the private image, create a registry Secret from a protected Docker authentication file:
 
    ```bash
-   python3 scripts/secretctl.py add ekorn-care-bot ghcr-auth \
+   python3 scripts/secretctl.py add acorn-care-bot ghcr-auth \
      --type kubernetes.io/dockerconfigjson \
      --file .dockerconfigjson=/absolute/protected/path/ghcr-auth.json
    ```
@@ -251,7 +251,7 @@ Its health endpoints remain inside the cluster.
 Before starting the new bot, stop the old care scheduler and export its shared record through a protected channel.
 Follow the bot repository's migration procedure to preserve portions, task states, caregiver provenance, and health holds.
 Do not commit that record or copy its old bot message identifiers into new active panels.
-The new service stores its record at `/data/state.json` on the `ekorn-care-bot-state` volume.
+The new service stores its record at `/data/state.json` on the `acorn-care-bot-state` volume.
 The volume survives Flux pruning. It still needs a separate backup.
 
 After the state and secrets are ready, change the Deployment to one replica and remove the Flux suspension in one reviewed change.

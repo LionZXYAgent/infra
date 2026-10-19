@@ -1,6 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: ekorn-care-bot
+namespace: acorn-care-bot
 resources:
   - deployment.yaml
   - storage.yaml

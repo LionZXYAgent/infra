@@ -137,7 +137,7 @@ class Deployment:
             raise RuntimeError('Prepared application started workloads')
 
     def verify_migrations_suspended(self, fixture):
-        self.verify_suspended_application(fixture, 'ekorn-care-bot')
+        self.verify_suspended_application(fixture, 'acorn-care-bot')
         for contract in sorted((fixture.infra_path / 'tests/migrations').glob('*.yaml')):
             name = contract.stem
             configuration = yaml.safe_load(contract.read_text())
