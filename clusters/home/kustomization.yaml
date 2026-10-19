@@ -9,3 +9,4 @@ resources:
   - infrastructure.yaml
   - apps.yaml
   - immich.yaml
+  - warden.yaml
