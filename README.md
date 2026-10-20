@@ -216,6 +216,11 @@ The morning time applies from `2026-10-20`. This configuration does not recreate
 The Deployment reads these files through a generated ConfigMap, a Kubernetes object for nonsecret configuration.
 A change to either file changes the ConfigMap name and the Deployment references.
 
+The owners disabled automatic repeat reminders with `automatic_repeats: false` on `2026-10-20`.
+The bot still sends each scheduled checklist once at `07:00`, `14:00`, and `19:00`.
+An explicit snooze sends one reminder at its requested time.
+The updated image applies this setting to existing state at startup without changing confirmations, portions, holds, or pending transfers.
+
 Keep the bot token in the private secrets module.
 Do not add it to either public configuration file.
 The application Secret needs only the existing `bot-token` key.

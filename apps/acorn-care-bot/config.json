@@ -4,6 +4,7 @@
   "timezone": "Europe/London",
   "start_date": "2026-10-19",
   "repeat_minutes": 30,
+  "automatic_repeats": false,
   "quiet_start": "23:00",
   "quiet_end": "07:00",
   "wet_product": "Royal Canin Gastrointestinal Kitten",
