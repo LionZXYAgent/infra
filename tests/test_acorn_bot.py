@@ -93,7 +93,7 @@ class AcornManifestTests(unittest.TestCase):
             self.assertEqual(sum(stage['wet']), stage['daily_wet'])
             self.assertEqual(sum(stage['dry']), stage['daily_dry'])
         self.assertEqual(config['wet_can_grams'], 195)
-        self.assertEqual(config['slots'][2]['cleaning_tasks'], ['litter', 'bowls'])
+        self.assertEqual(config['slots'][2]['cleaning_tasks'], ['litter'])
         for key in ('tasks', 'checklists', 'carryovers', 'audit', 'standalone', 'inline_panels',
                     'emissions', 'progression_hold', 'proposals', 'created_by', 'source_message', 'destination'):
             self.assertNotIn(key, config)
@@ -103,6 +103,20 @@ class AcornManifestTests(unittest.TestCase):
         config = json.loads((APP / 'config.json').read_text())
         self.assertIs(config['automatic_repeats'], False)
         self.assertEqual(config['repeat_minutes'], 30)
+        self.assertEqual([slot['time'] for slot in config['slots']], ['07:00', '14:00', '19:00'])
+        self.assertEqual(self.spec['replicas'], 1)
+        self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
+
+    def test_bowls_and_wiping_are_morning_only_without_changing_other_care(self):
+        config = json.loads((APP / 'config.json').read_text())
+        self.assertIs(config['bowls_morning_only'], True)
+        defaults = ['litter', 'bowls', 'water']
+        cleaning = {slot['key']: slot.get('cleaning_tasks', defaults) if slot['cleaning'] else []
+                    for slot in config['slots']}
+        self.assertEqual(cleaning, {'breakfast': ['litter', 'bowls', 'water'],
+                                   'lunch': [], 'dinner': ['litter']})
+        self.assertEqual(config['food_transfer_policy'], 'add_full')
+        self.assertIs(config['automatic_repeats'], False)
         self.assertEqual([slot['time'] for slot in config['slots']], ['07:00', '14:00', '19:00'])
         self.assertEqual(self.spec['replicas'], 1)
         self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
