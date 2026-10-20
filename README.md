@@ -201,87 +201,142 @@ These checks work without private repository access. Every PR also runs a fresh
 deployment with disposable secrets and local TLS in GitHub Actions. See the
 [isolated deployment procedure](tests/isolated/README.md) to run it in a VM.
 
-## Greenwich bin reminders
+## Shared Telegram bot
 
-The Greenwich sender posts the following Monday-to-Sunday collection schedule to Telegram topic `45` in chat `-1004424243504`.
-It runs each Monday at `12:00` in `Europe/London`, including daylight-saving changes.
-The notice uses native Telegram headings, date groups, bin lists, and clickable council links.
+`apps/telegram-bot-suite` combines Acorn care and Greenwich bin reminders under one Telegram identity.
+A gateway holds the existing `acorn-care-bot` token and receives Telegram updates.
+Each module runs in its own container with a distinct Linux user ID.
+Modules use separate Unix sockets, local connections with kernel-checked caller identities.
+Neither module can read the token, another module's socket, or another module's saved records.
+The gateway rejects methods, destinations, callback responses, and message changes outside each module's permissions.
+
+Acorn receives messages and button presses only from care topic `210` in chat `-1004424243504`.
+The bin module sends notices only to topic `45` and cannot receive updates.
+The gateway saves routed updates before it acknowledges them to Telegram.
+It retains each module's queue until that module acknowledges its saved offset.
+A full queue stops polling rather than discarding addressed updates.
+The gateway permits edits, pins, and deletion only for messages that belong to the requesting module.
+It exposes no method for webhook changes, bot commands, topic changes, or bulk unpinning.
+
+Each container has a read-only root filesystem, resource limits, separate temporary storage, and no cluster API credential.
+A network policy blocks incoming application connections and outgoing connections to private networks.
+The pod needs public HTTPS for Telegram and council sources, plus cluster DNS.
+Containers share the pod's network and the host kernel. This is not virtual-machine isolation.
+A node administrator remains trusted. A gateway compromise can affect every module because the gateway holds the token.
+
+The suite uses three separate retained volumes for care, bin publications, and the gateway's update queue and message ownership.
+The care container reuses `acorn-care-bot-state` without a reset or care-state import.
+A one-time initialization copies only existing Acorn message receipts and its saved update offset to the gateway.
+The initialization mounts care state read-only and refuses to run while the old care process holds its file lease.
+Later restarts do not import worker-authored ownership records again.
+Care confirmations, portions, health holds, transfers, and existing buttons remain in their current record.
+
+The new Flux object stays suspended, and its Deployment has zero replicas.
+The existing Acorn Deployment remains unchanged and responsible for live care.
+This preparation does not stop either current reminder service or publish a Telegram message.
+There is no separate bin CronJob in this implementation.
+Do not activate the separate [legacy binbot implementation](https://github.com/LionZXYOrg/infra/pull/19).
+
+### Greenwich notices
+
+The bin module sends the following Monday-to-Sunday schedule each Monday at noon in `Europe/London`.
+Its scheduler accepts only the noon-to-13:00 window, including daylight-saving changes.
+It checks gateway access and pin permissions before saving an attempt.
+An unavailable gateway creates no attempt and can recover within that window.
+After the saved attempt starts the sender, a restart does not retry it.
+An unknown send outcome blocks further publications until an operator reviews the saved record.
+The rich notice keeps native Telegram headings, date groups, bin lists, and council links.
 A compatible Telegram client and the `sendRichMessage` API are required.
 
-Both `clusters/home/greenwich-bin-bot.yaml` and `apps/greenwich-bin-bot/cronjob.yaml` remain suspended.
-Merging this preparation does not start another sender or stop the current reminder.
-The older [binbot migration PR](https://github.com/LionZXYOrg/infra/pull/19) is a separate implementation.
-Do not activate both implementations.
-
-The CronJob, a scheduled Kubernetes Job, reuses namespace `acorn-care-bot` and its existing Secret `acorn-care-bot`, key `bot-token`.
-It mounts the same token file as Acorn without copying or rotating the token.
-It never receives Telegram updates or changes webhooks, bot commands, or forum topics.
-Acorn keeps its existing update receiver and care topic `210`.
-The sender permits messages only in bin topic `45`.
-It changes pins only by explicit message IDs from its own publication records.
-The saved state binds those records to the numeric bot ID, destination, and private property identity.
-A token for a different bot cannot reuse that state.
-It never removes all pins or imports Acorn message records.
-
-`greenwich-bin-bot-state` stores publication records on a separate persistent volume.
-The job never mounts Acorn state or changes its portions, schedule, or confirmations.
-A file lock and a saved send claim prevent duplicate publications across concurrent or interrupted runs.
-An unknown send result blocks new sends until an operator reviews the topic and saved state.
-The job has no automatic restart or failed-job retry.
-Do not delete its volume or reset its state to retry a send.
-
-Each publication fetches all five official sources again.
-The parser matches the exact private property and published Week A/B calendar.
-It applies each published holiday revision once, including confirmed collections moved across week boundaries.
-If holiday dates are unconfirmed, the notice warns instead of guessing.
-A failed source request never falls back to cached data.
-If the council data cannot be verified, the sender keeps the previous pin and posts one fixed alert per week.
-After a successful send, it pins the new notice before cleaning up its own previous notice.
-A cleanup error remains visible in `cleanup_pending` and does not block future weeks.
-If Telegram definitively rejects an obsolete notice's pin, its status becomes `superseded` and later weeks continue.
-The sender retains that notice's confirmed send record and never resends it.
-An uncertain pin result still needs review or a later confirmed pin response.
-Telegram normally prevents deletion after 48 hours, so older notices stay in chat history after unpinning.
+Each publication refreshes all five council sources and matches the exact configured property.
+The parser uses the published Week A/B calendar and applies holiday revisions once.
+It warns about unconfirmed holiday dates instead of guessing.
+A failed fetch never uses cached data as a fallback.
+A council failure leaves the previous pin and sends at most one fixed alert per week.
+After a confirmed send, the module pins the new notice before cleaning up its own previous notice.
+Cleanup failure does not block later weeks. Unknown delivery still requires review.
+Telegram normally blocks deletion after 48 hours, so older notices can remain after unpinning.
 
 The private module must provide Secret `greenwich-bin-bot-property` in namespace `acorn-care-bot`, key `property.json`.
 The JSON object contains `address_label` and `property`.
-The `property` object requires string fields `sao`, `pao`, `streetName`, `postTown`, and `Postcode`.
-Use an empty `sao` for a property without a subproperty label.
+The `property` object needs string fields `sao`, `pao`, `streetName`, `postTown`, and `Postcode`.
+For a property without a subproperty label, use an empty `sao`.
 `address_label` joins the house label, street, town, and postcode with ` - `.
 The house label joins nonempty `sao` and `pao` with a space.
-Use the exact label and fields returned by the council lookup.
-Keep the real address, postcode, token, cached source responses, and runtime records out of this public repository.
-Use `scripts/secretctl.py` for the private Secret change.
+Use the exact label and fields from the council lookup.
+Keep real addresses, postcodes, source responses, tokens, and runtime records outside this public repository.
 This preparation does not create that Secret or change the private module pointer.
 
-Before activation, complete this coordinated cutover:
+### Coordinated activation and rollback
 
-1. Add the property Secret through the private module and merge its private PR.
-2. Update the public Gitlink to the published private `main` commit.
-3. While the CronJob stays suspended, reconcile its Flux object to create the code and separate persistent volume.
-4. With an administrator account, run `verify` and `preview` in an isolated one-off pod with the documented mounts.
-5. Make sure that the mounted token identifies Acorn and can send and pin messages in the bin topic.
-6. Disable the existing ZeroClaw bin job `d3cf4dc9-a75d-42b2-943c-0e1d6ba7ac36` before the next Monday run.
-7. Keep the retired duplicate job `cb3196b1-dad3-4ea6-82b1-608143c735ad` disabled.
-8. Make sure that no legacy binbot sender or unfinished bin job can publish the same target week.
-9. Enable the CronJob through a reviewed Git change before Monday noon.
-10. After its first scheduled publication, make sure that exactly one correct notice is pinned.
-11. If the previous sender used another Telegram bot, remove only its recorded old pin through that sender or an administrator.
+Do not enable both care receivers. Duplicate reminders can cause caregivers to issue the same portion twice.
+Do not remove any retained volume to retry an uncertain send.
+Acorn keeps its approved care plan during this transport change.
 
-Do not restart or suspend Acorn during this cutover.
-Do not import another bot's message ownership records into the new sender.
-If the old sender already published the target week, wait for the next unpublished target week before activation.
-Keep its saved records for rollback and manual review.
-If a result is uncertain, do not run a manual replacement Job or re-enable the old sender without review.
+1. Add the property Secret through `scripts/secretctl.py` in the private module.
+2. Merge the private change and update the public Gitlink to private `main`.
+3. Make sure that the tested image is public and supports both cluster architectures.
+4. Back up all three volumes outside Git before the cutover.
+5. If bin storage already contains old sender records, complete the offline ownership migration below.
+6. Stop the old Acorn Deployment through a separate reviewed Git change with `replicas: 0`.
+7. Wait until its pod terminates and releases the care volume and polling lease.
+8. Disable the existing bin job `d3cf4dc9-a75d-42b2-943c-0e1d6ba7ac36` before the next unpublished target week.
+9. Keep the retired duplicate `cb3196b1-dad3-4ea6-82b1-608143c735ad` disabled.
+10. Make sure that no old care receiver, bin sender, or unfinished publication remains active.
+11. Unsuspend the suite and set its replicas to one through a reviewed Git change.
+12. Make sure that gateway and care readiness succeed before testing an existing care button.
+13. Before Monday noon, run a bin `preview` and a read-only `verify` through its scoped socket.
+14. After the first scheduled notice, make sure that exactly one correct notice is pinned.
 
-The container uses Python's standard library and a digest-pinned public Python image.
-It needs outbound HTTPS but no Service, public route, cluster credentials, or long-running health endpoint.
-The job deadline and exit status report execution health.
-The `status` command shows publication status and pending cleanup without reading the token or exposing the property.
-`verify` checks identity and pin permission without sending messages.
-`preview` fetches current council data without reading the token or changing state.
-Only `run` sends notices, and it accepts Monday at or after noon in London.
-There is no reset, initial-send, force-send, or resend command.
+If the old bin sender already published the target week, wait for the next unpublished target week before activation.
+Before rollback, pause upstream polling without stopping Acorn.
+Create `/gateway/private/pause-polling` inside the gateway container as its configured user.
+Keep Acorn running until the gateway endpoint `/drainz` returns HTTP 200.
+This endpoint requires paused polling, no active upstream poll, and an empty saved update queue.
+Acorn must save and acknowledge every queued update before the endpoint succeeds.
+If the queue cannot drain, keep both receivers stopped and recover its saved updates offline.
+Do not restore the old receiver while acknowledged updates remain only in the gateway queue.
+
+After the queue drains, stop the suite completely before restoring the old care Deployment to one replica.
+The old care service reuses the same saved care record and ignores already-processed update IDs.
+If a bin delivery is uncertain, review the topic and records before reactivating either bin sender.
+Keep the gateway volume and ownership snapshot during rollback. Never reset the saved polling offset.
+Before returning to the suite, stop the old receiver and reconcile any updates it processed during rollback.
+Do not reuse the old gateway database without that review.
+Remove the pause file only after that review, before restarting gateway polling.
+
+### Existing bin storage
+
+The former standalone bin sender used Linux user ID `10001`.
+The isolated bin container uses user ID `10002`.
+Existing files with mode `0600` need an offline ownership migration before this change.
+The volume group alone does not grant access to those files.
+
+Stop all bin senders before migration. A concurrent sender can cause repeated or lost publications.
+Back up the volume before changing ownership.
+Mount the detached bin volume at `/offline/bin-state` on a trusted maintenance host.
+As root on that host, run the repository script with the explicit stopped-worker confirmation:
+
+```bash
+python3 apps/telegram-bot-suite/src/migrate_storage.py \
+  /offline/bin-state --confirm-workers-stopped
+```
+
+The script preserves records and permissions and changes ownership to `10002:10002`.
+It rejects unsafe entries and held file locks before changing any ownership.
+Do not run this command on the care volume or gateway volume.
+The suite does not receive root privileges or an automatic ownership-changing init container.
+
+### Add another module
+
+Add a worker entry to `registry.json` with a unique ID, Linux user ID, socket, chat, topic, and explicit methods.
+Add a separate container with its own socket volume, configuration, temporary storage, resource limits, and persistent volume.
+Each module can use its own image and dependencies without changing another module's environment.
+Mount only that module's socket directory into its container.
+Do not mount the Telegram token or another module's volume into a worker.
+For a receiving module, use `getUpdates` through `gateway_client.UnixClient` and acknowledge only after saving its effects.
+For a sending module, keep `receives_updates: false` and omit polling methods.
+Add offline tests for route overlap, permission boundaries, restart recovery, and uncertain delivery before activation.
 
 ## Acorn care bot
 

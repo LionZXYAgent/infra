@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 
-SRC = Path(__file__).resolve().parents[1] / "apps/greenwich-bin-bot/src"
+SRC = Path(__file__).resolve().parents[1] / "apps/telegram-bot-suite/src"
 
 
 def load_module(name, filename, dependencies=None):

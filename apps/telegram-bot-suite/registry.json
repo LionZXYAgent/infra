@@ -1,0 +1,44 @@
+{
+  "workers": [
+    {
+      "id": "acorn",
+      "uid": 10001,
+      "socket_path": "/run/workers/acorn/private/api.sock",
+      "chat_id": -1004424243504,
+      "topic_id": 210,
+      "receives_updates": true,
+      "allowed_user_ids": [
+        474744725,
+        1235433892
+      ],
+      "methods": [
+        "getMe",
+        "getWebhookInfo",
+        "getChatMember",
+        "getUpdates",
+        "sendMessage",
+        "editMessageText",
+        "answerCallbackQuery"
+      ]
+    },
+    {
+      "id": "greenwich",
+      "uid": 10002,
+      "socket_path": "/run/workers/greenwich/private/api.sock",
+      "chat_id": -1004424243504,
+      "topic_id": 45,
+      "receives_updates": false,
+      "methods": [
+        "getMe",
+        "getChatMember",
+        "sendMessage",
+        "sendRichMessage",
+        "pinChatMessage",
+        "unpinChatMessage",
+        "deleteMessage"
+      ],
+      "allowed_user_ids": []
+    }
+  ],
+  "state_path": "/gateway/private/state.sqlite3"
+}

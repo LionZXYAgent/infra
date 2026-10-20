@@ -20,7 +20,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "apps/greenwich-bin-bot/src"
+SRC = ROOT / "apps/telegram-bot-suite/src"
 
 # Use private module names so other application tests cannot replace these modules.
 def load(name, filename, dependencies=None):

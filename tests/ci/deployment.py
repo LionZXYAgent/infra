@@ -146,8 +146,8 @@ class Deployment:
 
     def verify_migrations_suspended(self, fixture):
         self.verify_suspended_application(fixture, 'acorn-care-bot')
-        if (fixture.infra_path / 'clusters/home/greenwich-bin-bot.yaml').exists():
-            self.verify_suspended_application(fixture, 'greenwich-bin-bot')
+        if (fixture.infra_path / 'clusters/home/telegram-bot-suite.yaml').exists():
+            self.verify_suspended_application(fixture, 'telegram-bot-suite')
         for contract in sorted((fixture.infra_path / 'tests/migrations').glob('*.yaml')):
             name = contract.stem
             configuration = yaml.safe_load(contract.read_text())

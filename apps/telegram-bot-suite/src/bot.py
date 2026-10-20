@@ -68,6 +68,18 @@ class Telegram:
     }
 
     def __init__(self):
+        self._gateway = None
+        if "TELEGRAM_GATEWAY_SOCKET" in os.environ:
+            from gateway_client import UnixClient
+            socket_path = os.environ["TELEGRAM_GATEWAY_SOCKET"]
+            if not socket_path or not os.path.isabs(socket_path):
+                raise BotError("An absolute Telegram gateway socket is required.")
+            self._gateway = UnixClient(socket_path)
+            me = self.call("getMe", {})
+            if not isinstance(me, dict) or not _positive(me.get("id")) or me.get("is_bot") is not True:
+                raise BotError("The gateway returned an invalid bot identity.")
+            self._bot_id = me["id"]
+            return
         path = Path(os.environ.get("TELEGRAM_BOT_TOKEN_FILE", "/var/run/acorn/token"))
         try:
             with path.open("r", encoding="utf-8") as stream:
@@ -105,6 +117,13 @@ class Telegram:
             raise BotError("A recorded message identifier is required for pin changes or cleanup.")
         if method == "getChatMember" and not _positive(payload.get("user_id")):
             raise BotError("A bot identifier is required for permission checks.")
+        if self._gateway is not None:
+            from telegram_api import TelegramError as GatewayError
+            try:
+                return self._gateway.call(method, payload)
+            except GatewayError as error:
+                raise TelegramError("The gateway did not confirm the request. Automatic send retries are blocked.",
+                                    uncertain=error.uncertain) from None
         request = Request("https://api.telegram.org/bot" + self._token + "/" + method,
                           data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                           headers={"Content-Type": "application/json"})

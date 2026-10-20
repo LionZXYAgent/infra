@@ -1,13 +1,22 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-# Reuse Acorn's namespace so the existing token stays in one Secret.
 namespace: acorn-care-bot
 resources:
-  - cronjob.yaml
+  - deployment.yaml
   - storage.yaml
+  - networkpolicy.yaml
 configMapGenerator:
+  - name: telegram-suite-acorn-config
+    envs:
+      - runtime.properties
+    files:
+      - config.json
   - name: greenwich-bin-bot-code
     files:
       - src/bot.py
       - src/council.py
       - src/storage.py
+      - src/runner.py
+  - name: telegram-bot-gateway-registry
+    files:
+      - registry.json
