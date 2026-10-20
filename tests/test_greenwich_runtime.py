@@ -752,6 +752,56 @@ class PublicationTests(RuntimeCase):
         self.assertEqual(self.read_state()["publications"]["2026-10-26"]["status"], "complete")
         self.assertEqual([method for method, _ in client.calls].count("sendRichMessage"), 1)
 
+    def test_definite_rejected_old_pin_does_not_block_later_notices(self):
+        client = FakeTelegram(failure=lambda m, p: bot.TelegramError("Pin rejected.") if m == "pinChatMessage" else None)
+        with self.assertRaises(bot.TelegramError):
+            bot.publish(client, schedule(), NOW, self.state)
+        for offset in (7, 14):
+            later = NOW + timedelta(days=offset)
+            client.failure = lambda m, p: bot.TelegramError("Deleted old notice.") if m == "pinChatMessage" and p["message_id"] == 101 else None
+            with patch.object(bot, "Telegram", return_value=client), patch.object(bot, "fetch_schedule", return_value=schedule(later)) as fetch:
+                code, result = self.main(["run"], later)
+            self.assertEqual((code, result["status"]), (0, "published"))
+            fetch.assert_called_once()
+        state = self.read_state()
+        self.assertEqual(state["publications"]["2026-10-26"]["status"], "superseded")
+        self.assertEqual(state["publications"]["2026-10-26"]["message_id"], 101)
+        self.assertEqual(state["current"]["target_start"], "2026-11-09")
+        self.assertEqual([m for m, _ in client.calls].count("sendRichMessage"), 3)
+        self.assertFalse(any(m in {"unpinChatMessage", "deleteMessage"} and p["message_id"] == 101 for m, p in client.calls))
+        self.assertEqual(self.main(["status"])[1]["publications"]["2026-10-26"]["status"], "superseded")
+
+    def test_current_target_pin_rejection_is_not_superseded_or_resent(self):
+        client = FakeTelegram(failure=lambda m, p: bot.TelegramError("Pin rejected.") if m == "pinChatMessage" else None)
+        with self.assertRaises(bot.TelegramError):
+            bot.publish(client, schedule(), NOW, self.state)
+        with self.assertRaises(bot.TelegramError):
+            bot.resume(client, NOW, self.state, schedule()["property_identity"])
+        self.assertEqual(self.read_state()["publications"]["2026-10-26"]["status"], "sent")
+        self.assertEqual([m for m, _ in client.calls].count("sendRichMessage"), 1)
+
+    def test_unknown_old_pin_is_not_superseded(self):
+        client = FakeTelegram(failure=lambda m, p: bot.TelegramError("Unknown pin.", uncertain=True) if m == "pinChatMessage" else None)
+        with self.assertRaises(bot.TelegramError):
+            bot.publish(client, schedule(), NOW, self.state)
+        later = NOW + timedelta(days=7)
+        with patch.object(bot, "Telegram", return_value=client), patch.object(bot, "fetch_schedule") as fetch:
+            code, result = self.main(["run"], later)
+        self.assertEqual(code, 1)
+        fetch.assert_not_called()
+        self.assertEqual(self.read_state()["publications"]["2026-10-26"]["status"], "sent")
+        self.assertEqual([m for m, _ in client.calls].count("sendRichMessage"), 1)
+
+    def test_superseded_send_receipt_still_prevents_duplicate_send(self):
+        client = FakeTelegram(failure=lambda m, p: bot.TelegramError("Rejected pin.") if m == "pinChatMessage" else None)
+        with self.assertRaises(bot.TelegramError):
+            bot.publish(client, schedule(), NOW, self.state)
+        bot.resume(client, NOW + timedelta(days=7), self.state, schedule()["property_identity"])
+        result = bot.publish(client, schedule(), NOW, self.state)
+        self.assertEqual(result["status"], "already_published")
+        self.assertFalse(result["pinned"])
+        self.assertEqual([m for m, _ in client.calls].count("sendRichMessage"), 1)
+
     def test_state_is_bound_to_destination_sender_property_and_version(self):
         bot.publish(FakeTelegram(), schedule(), NOW, self.state)
         original = self.read_state()

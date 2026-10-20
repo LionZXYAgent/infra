@@ -173,11 +173,11 @@ def _validate_state(state: dict, identity: str | None, bot_id: int | None = None
         for key, entry in state["publications"].items():
             if (date.fromisoformat(key).isoformat() != key or date.fromisoformat(key).weekday() != 0
                     or not isinstance(entry, dict) or entry["target_start"] != key
-                    or entry["status"] not in {"sending", "needs_review", "sent", "complete"}):
+                    or entry["status"] not in {"sending", "needs_review", "sent", "complete", "superseded"}):
                 raise ValueError
             if "message_id" in entry:
                 if (not _positive(entry["message_id"]) or not _positive(entry["date"])
-                        or entry["message_id"] in ids or entry["status"] not in {"sent", "complete"}):
+                        or entry["message_id"] in ids or entry["status"] not in {"sent", "complete", "superseded"}):
                     raise ValueError
                 ids.add(entry["message_id"])
             elif entry["status"] not in {"sending", "needs_review"}:
@@ -351,7 +351,7 @@ def cleanup_previous(client, state: dict, entry: dict, path: Path, now: datetime
 
 
 def publication_result(entry: dict, status: str) -> dict:
-    result = {"status": status, "message_id": entry["message_id"], "pinned": True,
+    result = {"status": status, "message_id": entry["message_id"], "pinned": entry.get("pinned") is True,
               "target_start": entry["target_start"]}
     if entry.get("cleanup_pending"):
         result.update(cleanup_pending=True, cleanup_note=entry["cleanup_note"])
@@ -383,10 +383,10 @@ def publish(client, schedule: dict, now: datetime, path: Path) -> dict:
         _blocked(state)
         entry = state["publications"].get(key)
         if entry:
-            if entry["status"] == "complete":
-                return {"status": "already_published", "message_id": entry["message_id"]}
+            if entry["status"] in {"complete", "superseded"}:
+                return publication_result(entry, "already_published")
             return finish_publication(client, state, entry, path, now)
-        if any(item["status"] != "complete" for item in state["publications"].values()):
+        if any(item["status"] not in {"complete", "superseded"} for item in state["publications"].values()):
             raise BotError("Finish the recorded publication before creating another notice.")
         entry = {"status": "sending", "claimed_at": now.isoformat(), "target_start": key,
                  "format": "rich_html", "previous": state["current"]}
@@ -413,11 +413,21 @@ def resume(client, now: datetime, path: Path, identity: str) -> dict | None:
         key = (date.fromisoformat(week_key(now)) + timedelta(days=7)).isoformat()
         recovered = None
         for target, entry in sorted(state["publications"].items()):
-            if entry["status"] != "complete":
-                result = finish_publication(client, state, entry, path, now)
+            if entry["status"] not in {"complete", "superseded"}:
+                try:
+                    result = finish_publication(client, state, entry, path, now)
+                except TelegramError as error:
+                    if target >= key or error.uncertain:
+                        raise
+                    # The send receipt is known. Never resend an obsolete notice.
+                    # A definite rejected pin must not block a newer target week.
+                    entry["status"] = "superseded"
+                    entry["pin_note"] = "Telegram rejected the obsolete notice's pin. Its confirmed send record is retained."
+                    atomic_json(path, state)
+                    continue
                 if target == key:
                     recovered = result
-            else:
+            elif entry["status"] == "complete":
                 cleanup_previous(client, state, entry, path, now)
         if recovered:
             return recovered
@@ -475,7 +485,7 @@ def main(argv=None) -> int:
         if args.command == "status":
             with locked_state(path) as state:
                 result = {"status": "ok", "destination": DESTINATION, "sender": SENDER,
-                          "publications": {key: {name: entry[name] for name in ("status", "message_id", "cleanup_pending", "cleanup_note") if name in entry}
+                          "publications": {key: {name: entry[name] for name in ("status", "message_id", "pin_note", "cleanup_pending", "cleanup_note") if name in entry}
                                            for key, entry in state["publications"].items()},
                           "alerts": {key: entry["status"] for key, entry in state["alerts"].items()}}
         elif args.command == "verify":

@@ -238,6 +238,9 @@ A failed source request never falls back to cached data.
 If the council data cannot be verified, the sender keeps the previous pin and posts one fixed alert per week.
 After a successful send, it pins the new notice before cleaning up its own previous notice.
 A cleanup error remains visible in `cleanup_pending` and does not block future weeks.
+If Telegram definitively rejects an obsolete notice's pin, its status becomes `superseded` and later weeks continue.
+The sender retains that notice's confirmed send record and never resends it.
+An uncertain pin result still needs review or a later confirmed pin response.
 Telegram normally prevents deletion after 48 hours, so older notices stay in chat history after unpinning.
 
 The private module must provide Secret `greenwich-bin-bot-property` in namespace `acorn-care-bot`, key `property.json`.
