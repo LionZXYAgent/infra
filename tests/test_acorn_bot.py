@@ -99,12 +99,20 @@ class AcornManifestTests(unittest.TestCase):
             self.assertNotIn(key, config)
         self.assertFalse(any('token' in key.lower() or 'password' in key.lower() for key in values))
 
+    def test_automatic_repeats_are_disabled_without_pausing_scheduled_care(self):
+        config = json.loads((APP / 'config.json').read_text())
+        self.assertIs(config['automatic_repeats'], False)
+        self.assertEqual(config['repeat_minutes'], 30)
+        self.assertEqual([slot['time'] for slot in config['slots']], ['07:00', '14:00', '19:00'])
+        self.assertEqual(self.spec['replicas'], 1)
+        self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
+
     def test_single_writer_with_retained_state_and_public_pinned_image(self):
         self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
         self.assertNotIn('imagePullSecrets', self.pod)
         self.assertEqual(self.container['image'],
-                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-38afbc7f99626f7dff50d031054143ef08d8ee0a'
-                         '@sha256:5047d5edf63a9bb13d5445c2374b36d1443b0f5712de192d1541bd3c1aec9dea')
+                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-b0cbb9527b1c8be4b5e37b27d4048f6c1cd45b7b'
+                         '@sha256:5bb653d18f5956d517a14ae269b51719dada8240b6df07e33122b9b997da9d70')
         volume = read(APP / 'storage.yaml')
         self.assertEqual(volume['metadata']['name'], 'acorn-care-bot-state')
         self.assertEqual(volume['spec']['accessModes'], ['ReadWriteOnce'])
@@ -204,7 +212,11 @@ class AcornManifestTests(unittest.TestCase):
             value = json.loads(plan.read_text())
             value['repeat_minutes'] += 1
             plan.write_text(json.dumps(value))
-            self.assertNotEqual(after_environment, render_name())
+            after_plan = render_name()
+            self.assertNotEqual(after_environment, after_plan)
+            value['automatic_repeats'] = True
+            plan.write_text(json.dumps(value))
+            self.assertNotEqual(after_plan, render_name())
 
 
 class AcornIsolationTests(unittest.TestCase):
