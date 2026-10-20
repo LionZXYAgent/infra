@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Reuse Acorn's namespace so the existing token stays in one Secret.
+namespace: acorn-care-bot
+resources:
+  - cronjob.yaml
+  - storage.yaml
+configMapGenerator:
+  - name: greenwich-bin-bot-code
+    files:
+      - src/bot.py
+      - src/council.py
+      - src/storage.py

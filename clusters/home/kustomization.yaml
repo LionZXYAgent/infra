@@ -12,5 +12,6 @@ resources:
   - warden.yaml
   - homeassist.yaml
   - acorn-care-bot.yaml
+  - greenwich-bin-bot.yaml
   - copyparty.yaml
   - birthday-reminder.yaml

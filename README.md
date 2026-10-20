@@ -201,6 +201,85 @@ These checks work without private repository access. Every PR also runs a fresh
 deployment with disposable secrets and local TLS in GitHub Actions. See the
 [isolated deployment procedure](tests/isolated/README.md) to run it in a VM.
 
+## Greenwich bin reminders
+
+The Greenwich sender posts the following Monday-to-Sunday collection schedule to Telegram topic `45` in chat `-1004424243504`.
+It runs each Monday at `12:00` in `Europe/London`, including daylight-saving changes.
+The notice uses native Telegram headings, date groups, bin lists, and clickable council links.
+A compatible Telegram client and the `sendRichMessage` API are required.
+
+Both `clusters/home/greenwich-bin-bot.yaml` and `apps/greenwich-bin-bot/cronjob.yaml` remain suspended.
+Merging this preparation does not start another sender or stop the current reminder.
+The older [binbot migration PR](https://github.com/LionZXYOrg/infra/pull/19) is a separate implementation.
+Do not activate both implementations.
+
+The CronJob, a scheduled Kubernetes Job, reuses namespace `acorn-care-bot` and its existing Secret `acorn-care-bot`, key `bot-token`.
+It mounts the same token file as Acorn without copying or rotating the token.
+It never receives Telegram updates or changes webhooks, bot commands, or forum topics.
+Acorn keeps its existing update receiver and care topic `210`.
+The sender permits messages only in bin topic `45`.
+It changes pins only by explicit message IDs from its own publication records.
+The saved state binds those records to the numeric bot ID, destination, and private property identity.
+A token for a different bot cannot reuse that state.
+It never removes all pins or imports Acorn message records.
+
+`greenwich-bin-bot-state` stores publication records on a separate persistent volume.
+The job never mounts Acorn state or changes its portions, schedule, or confirmations.
+A file lock and a saved send claim prevent duplicate publications across concurrent or interrupted runs.
+An unknown send result blocks new sends until an operator reviews the topic and saved state.
+The job has no automatic restart or failed-job retry.
+Do not delete its volume or reset its state to retry a send.
+
+Each publication fetches all five official sources again.
+The parser matches the exact private property and published Week A/B calendar.
+It applies each published holiday revision once, including confirmed collections moved across week boundaries.
+If holiday dates are unconfirmed, the notice warns instead of guessing.
+A failed source request never falls back to cached data.
+If the council data cannot be verified, the sender keeps the previous pin and posts one fixed alert per week.
+After a successful send, it pins the new notice before cleaning up its own previous notice.
+A cleanup error remains visible in `cleanup_pending` and does not block future weeks.
+Telegram normally prevents deletion after 48 hours, so older notices stay in chat history after unpinning.
+
+The private module must provide Secret `greenwich-bin-bot-property` in namespace `acorn-care-bot`, key `property.json`.
+The JSON object contains `address_label` and `property`.
+The `property` object requires string fields `sao`, `pao`, `streetName`, `postTown`, and `Postcode`.
+Use an empty `sao` for a property without a subproperty label.
+`address_label` joins the house label, street, town, and postcode with ` - `.
+The house label joins nonempty `sao` and `pao` with a space.
+Use the exact label and fields returned by the council lookup.
+Keep the real address, postcode, token, cached source responses, and runtime records out of this public repository.
+Use `scripts/secretctl.py` for the private Secret change.
+This preparation does not create that Secret or change the private module pointer.
+
+Before activation, complete this coordinated cutover:
+
+1. Add the property Secret through the private module and merge its private PR.
+2. Update the public Gitlink to the published private `main` commit.
+3. While the CronJob stays suspended, reconcile its Flux object to create the code and separate persistent volume.
+4. With an administrator account, run `verify` and `preview` in an isolated one-off pod with the documented mounts.
+5. Make sure that the mounted token identifies Acorn and can send and pin messages in the bin topic.
+6. Disable the existing ZeroClaw bin job `d3cf4dc9-a75d-42b2-943c-0e1d6ba7ac36` before the next Monday run.
+7. Keep the retired duplicate job `cb3196b1-dad3-4ea6-82b1-608143c735ad` disabled.
+8. Make sure that no legacy binbot sender or unfinished bin job can publish the same target week.
+9. Enable the CronJob through a reviewed Git change before Monday noon.
+10. After its first scheduled publication, make sure that exactly one correct notice is pinned.
+11. If the previous sender used another Telegram bot, remove only its recorded old pin through that sender or an administrator.
+
+Do not restart or suspend Acorn during this cutover.
+Do not import another bot's message ownership records into the new sender.
+If the old sender already published the target week, wait for the next unpublished target week before activation.
+Keep its saved records for rollback and manual review.
+If a result is uncertain, do not run a manual replacement Job or re-enable the old sender without review.
+
+The container uses Python's standard library and a digest-pinned public Python image.
+It needs outbound HTTPS but no Service, public route, cluster credentials, or long-running health endpoint.
+The job deadline and exit status report execution health.
+The `status` command shows publication status and pending cleanup without reading the token or exposing the property.
+`verify` checks identity and pin permission without sending messages.
+`preview` fetches current council data without reading the token or changing state.
+Only `run` sends notices, and it accepts Monday at or after noon in London.
+There is no reset, initial-send, force-send, or resend command.
+
 ## Acorn care bot
 
 The [separate bot repository](https://github.com/LionZXYOrg/acorn-care-bot) contains the application and its image build.

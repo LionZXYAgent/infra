@@ -127,6 +127,7 @@ class FixtureSet:
                     (infra / 'clusters/home' / destination).read_bytes())
                 isolated['resources'].append(destination)
         include_suspended_application(infra, isolated_root, isolated, 'acorn-care-bot')
+        include_suspended_application(infra, isolated_root, isolated, 'greenwich-bin-bot')
         for contract in sorted((infra / 'tests/migrations').glob('*.yaml')):
             name = contract.stem
             migration = yaml.safe_load((infra / 'clusters/home' / f'{name}.yaml').read_text())

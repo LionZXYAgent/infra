@@ -1,0 +1,103 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: greenwich-bin-bot
+spec:
+  # Keep this suspended until the old sender stops and private setup is complete.
+  suspend: true
+  schedule: "0 12 * * 1"
+  timeZone: Europe/London
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Retrying a failed send can duplicate a Telegram message.
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app: greenwich-bin-bot
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 45
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: sender
+              image: docker.io/library/python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258
+              imagePullPolicy: IfNotPresent
+              command: [python3, /opt/bins/bot.py, run]
+              env:
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+                - name: TELEGRAM_BOT_TOKEN_FILE
+                  value: /var/run/acorn/token
+                - name: BINS_PROPERTY_PATH
+                  value: /etc/bins/property.json
+                - name: BINS_STATE_PATH
+                  value: /data/state.json
+                - name: BINS_CACHE_PATH
+                  value: /data/council-cache.json
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 250m
+                  memory: 128Mi
+              volumeMounts:
+                - name: code
+                  mountPath: /opt/bins
+                  readOnly: true
+                - name: token
+                  mountPath: /var/run/acorn
+                  readOnly: true
+                - name: property
+                  mountPath: /etc/bins
+                  readOnly: true
+                - name: state
+                  mountPath: /data
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: code
+              configMap:
+                name: greenwich-bin-bot-code
+                defaultMode: 0444
+            - name: token
+              secret:
+                secretName: acorn-care-bot
+                defaultMode: 0440
+                items:
+                  - key: bot-token
+                    path: token
+            - name: property
+              secret:
+                secretName: greenwich-bin-bot-property
+                defaultMode: 0440
+                items:
+                  - key: property.json
+                    path: property.json
+            - name: state
+              persistentVolumeClaim:
+                claimName: greenwich-bin-bot-state
+            - name: tmp
+              emptyDir:
+                sizeLimit: 16Mi
