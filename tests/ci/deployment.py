@@ -140,7 +140,7 @@ class Deployment:
             if obj['spec'].get('suspend') is not True:
                 raise RuntimeError('Prepared application became active')
         namespace = configuration['spec'].get('targetNamespace', name)
-        resources = json.loads(self.kube(['-n', namespace, 'get', 'pods,deployments,statefulsets,jobs,cronjobs', '-o', 'json']))
+        resources = json.loads(self.kube(['-n', namespace, 'get', 'pods,deployments,statefulsets,jobs,cronjobs,helmreleases', '-o', 'json']))
         if resources['items']:
             raise RuntimeError('Prepared application started workloads')
 

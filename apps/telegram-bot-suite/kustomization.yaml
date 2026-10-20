@@ -2,21 +2,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: acorn-care-bot
 resources:
-  - deployment.yaml
-  - storage.yaml
-  - networkpolicy.yaml
-configMapGenerator:
-  - name: telegram-suite-acorn-config
-    envs:
-      - runtime.properties
-    files:
-      - config.json
-  - name: greenwich-bin-bot-code
-    files:
-      - src/bot.py
-      - src/council.py
-      - src/storage.py
-      - src/runner.py
-  - name: telegram-bot-gateway-registry
-    files:
-      - registry.json
+  - source.yaml
+  - helmrelease.yaml
