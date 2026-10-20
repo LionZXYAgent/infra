@@ -303,6 +303,14 @@ The bot still sends each scheduled checklist once at `07:00`, `14:00`, and `19:0
 An explicit snooze sends one reminder at its requested time.
 The updated image applies this setting to existing state at startup without changing confirmations, portions, holds, or pending transfers.
 
+The owners requested bowl washing and wiping the feeding area once daily, at breakfast.
+`bowls_morning_only: true` selects this schedule. Dinner keeps its litter task.
+Breakfast keeps litter, bowls, and fresh water. Lunch has no routine cleaning.
+This setting requires a bot image that supports the morning-only startup update.
+That update preserves completed tasks, historical records, food portions, and explicit one-time transfers.
+It cancels only open routine bowl tasks outside breakfast from the activation date onward.
+Removing the flag does not restore the previous cleaning schedule.
+
 Keep the bot token in the private secrets module.
 Do not add it to either public configuration file.
 The application Secret needs only the existing `bot-token` key.

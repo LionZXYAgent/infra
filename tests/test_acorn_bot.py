@@ -93,7 +93,7 @@ class AcornManifestTests(unittest.TestCase):
             self.assertEqual(sum(stage['wet']), stage['daily_wet'])
             self.assertEqual(sum(stage['dry']), stage['daily_dry'])
         self.assertEqual(config['wet_can_grams'], 195)
-        self.assertEqual(config['slots'][2]['cleaning_tasks'], ['litter', 'bowls'])
+        self.assertEqual(config['slots'][2]['cleaning_tasks'], ['litter'])
         for key in ('tasks', 'checklists', 'carryovers', 'audit', 'standalone', 'inline_panels',
                     'emissions', 'progression_hold', 'proposals', 'created_by', 'source_message', 'destination'):
             self.assertNotIn(key, config)
@@ -107,12 +107,26 @@ class AcornManifestTests(unittest.TestCase):
         self.assertEqual(self.spec['replicas'], 1)
         self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
 
+    def test_bowls_and_wiping_are_morning_only_without_changing_other_care(self):
+        config = json.loads((APP / 'config.json').read_text())
+        self.assertIs(config['bowls_morning_only'], True)
+        defaults = ['litter', 'bowls', 'water']
+        cleaning = {slot['key']: slot.get('cleaning_tasks', defaults) if slot['cleaning'] else []
+                    for slot in config['slots']}
+        self.assertEqual(cleaning, {'breakfast': ['litter', 'bowls', 'water'],
+                                   'lunch': [], 'dinner': ['litter']})
+        self.assertEqual(config['food_transfer_policy'], 'add_full')
+        self.assertIs(config['automatic_repeats'], False)
+        self.assertEqual([slot['time'] for slot in config['slots']], ['07:00', '14:00', '19:00'])
+        self.assertEqual(self.spec['replicas'], 1)
+        self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
+
     def test_single_writer_with_retained_state_and_public_pinned_image(self):
         self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
         self.assertNotIn('imagePullSecrets', self.pod)
         self.assertEqual(self.container['image'],
-                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-d5f4fcf47d9f7f0e4ed801bde3f9ef972259571b'
-                         '@sha256:6ab4ac5be90408376deb885e882607cadcbd2ad4683d3806b86ab45a6f9483d8')
+                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-839fa74c1513e41634e5bde685b4f6183fdd5508'
+                         '@sha256:f3dbbaed96afa65de2e3ab952c40fd61ff9a27beeb5e48b19b7ea42f3ba811c7')
         volume = read(APP / 'storage.yaml')
         self.assertEqual(volume['metadata']['name'], 'acorn-care-bot-state')
         self.assertEqual(volume['spec']['accessModes'], ['ReadWriteOnce'])
