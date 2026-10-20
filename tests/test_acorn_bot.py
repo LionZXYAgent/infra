@@ -111,8 +111,8 @@ class AcornManifestTests(unittest.TestCase):
         self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
         self.assertNotIn('imagePullSecrets', self.pod)
         self.assertEqual(self.container['image'],
-                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-b0cbb9527b1c8be4b5e37b27d4048f6c1cd45b7b'
-                         '@sha256:5bb653d18f5956d517a14ae269b51719dada8240b6df07e33122b9b997da9d70')
+                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-d5f4fcf47d9f7f0e4ed801bde3f9ef972259571b'
+                         '@sha256:6ab4ac5be90408376deb885e882607cadcbd2ad4683d3806b86ab45a6f9483d8')
         volume = read(APP / 'storage.yaml')
         self.assertEqual(volume['metadata']['name'], 'acorn-care-bot-state')
         self.assertEqual(volume['spec']['accessModes'], ['ReadWriteOnce'])
