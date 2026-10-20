@@ -53,6 +53,7 @@ class TelegramSuiteFluxTests(unittest.TestCase):
         self.assertEqual(set(source['ref']), {'commit'})
         self.assertRegex(source['ref']['commit'], r'^[0-9a-f]{40}$')
         self.assertEqual(source['ignore'], '/*\n!/charts\n')
+        self.assertIn(':sha-' + source['ref']['commit'] + '@', self.values['image'])
         spec = self.release['spec']['chart']['spec']
         self.assertEqual(spec['chart'], './charts/telegram-bot-suite')
         self.assertEqual(spec['reconcileStrategy'], 'Revision')
