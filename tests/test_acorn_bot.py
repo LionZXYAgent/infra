@@ -168,7 +168,7 @@ class AcornManifestTests(unittest.TestCase):
     def test_secret_namespace_dependencies_do_not_enable_other_applications(self):
         namespaces = read(ROOT / 'infrastructure/namespaces/kustomization.yaml')['resources']
         applications = read(ROOT / 'clusters/home/kustomization.yaml')['resources']
-        for name in ('psybot', 'replacevowelbot'):
+        for name in ('psybot',):
             with self.subTest(namespace=name):
                 self.assertIn(f'{name}.yaml', namespaces)
                 namespace = read(ROOT / f'infrastructure/namespaces/{name}.yaml')

@@ -16,3 +16,4 @@ resources:
   - copyparty.yaml
   - transfersh.yaml
   - birthday-reminder.yaml
+  - replacevowelbot.yaml
