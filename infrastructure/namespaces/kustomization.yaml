@@ -8,6 +8,7 @@ resources:
 - homeassist.yaml
 - immich.yaml
 - k3s-mcp.yaml
+- localcontentshare.yaml
 - obsidian.yaml
 - psybot.yaml
 - replacevowelbot.yaml
