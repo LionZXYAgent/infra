@@ -201,6 +201,24 @@ These checks work without private repository access. Every PR also runs a fresh
 deployment with disposable secrets and local TLS in GitHub Actions. See the
 [isolated deployment procedure](tests/isolated/README.md) to run it in a VM.
 
+## Shared Telegram bot
+
+The [application repository](https://github.com/LionZXYOrg/acorn-care-bot) owns the workers, gateway, Helm chart, tests, and operating procedure.
+`apps/telegram-bot-suite` contains only Flux resources and this cluster's values.
+Flux reads `charts/telegram-bot-suite` from an exact application commit.
+The image uses a tested commit tag and immutable digest.
+
+The preparation keeps both Flux objects suspended and sets zero replicas.
+The current Acorn Deployment, reminder jobs, and saved records remain unchanged.
+Do not enable both care receivers. Duplicate reminders can cause caregivers to issue the same portion twice.
+Follow the [activation and rollback procedure](https://github.com/LionZXYOrg/acorn-care-bot/blob/main/docs/shared-suite.md) before enabling the suite.
+
+For this cluster, preserve Secret `acorn-care-bot`, the existing care claim, and the approved care plan.
+Supply Secret `greenwich-bin-bot-property` through the private secret procedure before activation.
+Stop bin job `d3cf4dc9-a75d-42b2-943c-0e1d6ba7ac36` during the coordinated cutover.
+Keep retired duplicate `cb3196b1-dad3-4ea6-82b1-608143c735ad` disabled.
+Old standalone Acorn manifests remain until that cutover. They still control the live service.
+
 ## Acorn care bot
 
 The [separate bot repository](https://github.com/LionZXYOrg/acorn-care-bot) contains the application and its image build.

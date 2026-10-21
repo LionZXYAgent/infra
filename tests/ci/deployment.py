@@ -139,12 +139,15 @@ class Deployment:
             obj = json.loads(self.kube(['-n', 'flux-system', 'get', 'kustomization', name, '-o', 'json']))
             if obj['spec'].get('suspend') is not True:
                 raise RuntimeError('Prepared application became active')
-        resources = json.loads(self.kube(['-n', name, 'get', 'pods,deployments,statefulsets,jobs', '-o', 'json']))
+        namespace = configuration['spec'].get('targetNamespace', name)
+        resources = json.loads(self.kube(['-n', namespace, 'get', 'pods,deployments,statefulsets,jobs,cronjobs,helmreleases', '-o', 'json']))
         if resources['items']:
             raise RuntimeError('Prepared application started workloads')
 
     def verify_migrations_suspended(self, fixture):
         self.verify_suspended_application(fixture, 'acorn-care-bot')
+        if (fixture.infra_path / 'clusters/home/telegram-bot-suite.yaml').exists():
+            self.verify_suspended_application(fixture, 'telegram-bot-suite')
         for contract in sorted((fixture.infra_path / 'tests/migrations').glob('*.yaml')):
             name = contract.stem
             configuration = yaml.safe_load(contract.read_text())
