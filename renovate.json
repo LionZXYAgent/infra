@@ -1,0 +1,218 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "timezone": "Europe/London",
+  "schedule": [
+    "* 0-5 * * *"
+  ],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "automerge": false,
+  "dependencyDashboard": true,
+  "ignorePaths": [
+    "secrets/**",
+    "tests/**"
+  ],
+  "flux": {
+    "registryAliases": {
+      "charts-app": "https://bjw-s-labs.github.io/helm-charts",
+      "charts-couchdb": "https://apache.github.io/couchdb-helm",
+      "charts-vaultwarden": "https://guerzon.github.io/vaultwarden",
+      "charts-immich": "oci://ghcr.io/immich-app/immich-charts",
+      "traefik": "https://traefik.github.io/charts"
+    }
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "bjw-s app-template Helm chart",
+      "managerFilePatterns": [
+        "/^apps\\/[^/]+\\/helmrelease[^/]*\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "chart:[ \\t]*app-template[ \\t]*\\r?\\n[ \\t]*version:[ \\t]*['\\\"]?(?<currentValue>[^'\\\"\\s]+)"
+      ],
+      "depNameTemplate": "app-template",
+      "datasourceTemplate": "helm",
+      "registryUrlTemplate": "https://bjw-s-labs.github.io/helm-charts"
+    },
+    {
+      "customType": "regex",
+      "description": "Apache CouchDB Helm chart",
+      "managerFilePatterns": [
+        "/^apps\\/[^/]+\\/helmrelease[^/]*\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "chart:[ \\t]*couchdb[ \\t]*\\r?\\n[ \\t]*version:[ \\t]*['\\\"]?(?<currentValue>[^'\\\"\\s]+)"
+      ],
+      "depNameTemplate": "couchdb",
+      "datasourceTemplate": "helm",
+      "registryUrlTemplate": "https://apache.github.io/couchdb-helm"
+    },
+    {
+      "customType": "regex",
+      "description": "Vaultwarden Helm chart",
+      "managerFilePatterns": [
+        "/^apps\\/[^/]+\\/helmrelease[^/]*\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "chart:[ \\t]*vaultwarden[ \\t]*\\r?\\n[ \\t]*version:[ \\t]*['\\\"]?(?<currentValue>[^'\\\"\\s]+)"
+      ],
+      "depNameTemplate": "vaultwarden",
+      "datasourceTemplate": "helm",
+      "registryUrlTemplate": "https://guerzon.github.io/vaultwarden"
+    },
+    {
+      "customType": "regex",
+      "description": "Immich OCI Helm chart",
+      "managerFilePatterns": [
+        "/^apps\\/[^/]+\\/helmrelease[^/]*\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "chart:[ \\t]*immich[ \\t]*\\r?\\n[ \\t]*version:[ \\t]*['\\\"]?(?<currentValue>[^'\\\"\\s]+)"
+      ],
+      "depNameTemplate": "ghcr.io/immich-app/immich-charts/immich",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Docker image tags with separate sha256 digests",
+      "managerFilePatterns": [
+        "/^apps\\/[^/]+\\/helmrelease[^/]*\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "repository:[ \\t]*(?<depName>[^\\s]+)[ \\t]*\\r?\\n[ \\t]*tag:[ \\t]*['\\\"]?(?<currentValue>[^'\\\"\\s@]+)['\\\"]?(?:[ \\t]*\\r?\\n[ \\t]*pullPolicy:[^\\r\\n]+)?[ \\t]*\\r?\\n[ \\t]*digest:[ \\t]*(?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Docker image tags containing sha256 digests",
+      "managerFilePatterns": [
+        "/^apps\\/[^/]+\\/helmrelease[^/]*\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "repository:[ \\t]*(?<depName>[^\\s]+)[ \\t]*\\r?\\n[ \\t]*tag:[ \\t]*['\\\"]?(?<currentValue>[^'\\\"\\s@]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Pinned K3S_VERSION bootstrap tool",
+      "managerFilePatterns": [
+        "/^bootstrap\\/versions\\.env$/"
+      ],
+      "matchStrings": [
+        "K3S_VERSION='(?<currentValue>[^']+)'"
+      ],
+      "depNameTemplate": "k3s-io/k3s",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver-coerced"
+    },
+    {
+      "customType": "regex",
+      "description": "Pinned FLUX_VERSION bootstrap tool",
+      "managerFilePatterns": [
+        "/^bootstrap\\/versions\\.env$/"
+      ],
+      "matchStrings": [
+        "FLUX_VERSION='(?<currentValue>[^']+)'"
+      ],
+      "depNameTemplate": "fluxcd/flux2",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver-coerced"
+    },
+    {
+      "customType": "regex",
+      "description": "Pinned SOPS_VERSION bootstrap tool",
+      "managerFilePatterns": [
+        "/^bootstrap\\/versions\\.env$/"
+      ],
+      "matchStrings": [
+        "SOPS_VERSION='(?<currentValue>[^']+)'"
+      ],
+      "depNameTemplate": "getsops/sops",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver-coerced"
+    },
+    {
+      "customType": "regex",
+      "description": "Pinned GITLEAKS_VERSION bootstrap tool",
+      "managerFilePatterns": [
+        "/^bootstrap\\/versions\\.env$/"
+      ],
+      "matchStrings": [
+        "GITLEAKS_VERSION='(?<currentValue>[^']+)'"
+      ],
+      "depNameTemplate": "gitleaks/gitleaks",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver-coerced"
+    },
+    {
+      "customType": "regex",
+      "description": "Pinned HELM_VERSION bootstrap tool",
+      "managerFilePatterns": [
+        "/^bootstrap\\/versions\\.env$/"
+      ],
+      "matchStrings": [
+        "HELM_VERSION='(?<currentValue>[^']+)'"
+      ],
+      "depNameTemplate": "helm/helm",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver-coerced"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchManagers": [
+        "flux"
+      ],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchFileNames": [
+        "apps/**"
+      ],
+      "enabled": false,
+      "description": "Do not offer parallel tag-only Flux PRs for images with separately pinned digests"
+    },
+    {
+      "matchPackageNames": [
+        "ghcr.io/lionzxyorg/**",
+        "lionzxy/replace_vowel_bot"
+      ],
+      "enabled": false,
+      "description": "Git SHA images come from application repositories and require coordinated deploys"
+    },
+    {
+      "matchPackageNames": [
+        "ghcr.io/immich-app/postgres"
+      ],
+      "enabled": false,
+      "description": "Immich PostgreSQL and VectorChord upgrades require manual database migration review"
+    },
+    {
+      "matchPackageNames": [
+        "ghcr.io/immich-app/immich-server",
+        "ghcr.io/immich-app/immich-machine-learning"
+      ],
+      "groupName": "Immich application images"
+    },
+    {
+      "matchPackageNames": [
+        "app-template"
+      ],
+      "groupName": "bjw-s app-template charts"
+    },
+    {
+      "matchPackageNames": [
+        "fluxcd/flux2"
+      ],
+      "groupName": "Flux CLI and components"
+    }
+  ]
+}
