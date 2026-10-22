@@ -304,3 +304,27 @@ The disposable deployment test excludes the active production Flux object and re
 Prepared applications still enter CI only as suspended Flux objects.
 The disposable cluster does not run the bot or use live care records.
 A real Telegram confirmation test remains part of activation, not a public CI test.
+
+## Automatic dependency updates
+
+This repository uses [Renovate](https://docs.renovatebot.com/) to propose version
+updates through pull requests. Install the
+[Renovate GitHub App](https://github.com/apps/renovate) with access to
+`LionZXYOrg/infra`, then merge the `renovate.json` configuration PR.
+An app installation or organization administrator must grant access; committing
+the configuration alone does not activate the bot.
+
+Renovate opens update PRs during 00:00–06:00 Europe/London time, with at most
+five open update PRs and no automatic merging. Updates cover pinned bootstrap
+tools, GitHub Actions, Python packages, Flux resources, application Helm charts,
+and Docker image tags **together with their SHA-256 digests**. The dependency
+dashboard lists updates that are waiting for review. Local application images
+built from Git commit SHAs and the Immich database image are deliberately left
+for coordinated manual upgrades.
+
+Review each proposed update and require both GitHub Actions checks (`Validate`
+and `Deployment`) before merging. The migration fixtures and chart archive
+checksums under `tests/migrations/` may need manual refresh when versions change.
+Because production Flux watches `master`, **merging a Renovate PR can deploy
+updated software to the live cluster**. Keep high-risk database, controller, and
+chart-major upgrades behind human review and backups.
