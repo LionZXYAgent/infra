@@ -63,6 +63,16 @@ class TelegramSuiteFluxTests(unittest.TestCase):
         self.assertEqual(self.release['spec']['install']['remediation']['retries'], 0)
         self.assertEqual(self.release['spec']['upgrade']['remediation']['retries'], 0)
 
+    def test_prepared_suite_and_live_bot_use_the_same_gram_display_release(self):
+        standalone = read(ROOT / 'apps/acorn-care-bot/deployment.yaml')
+        image = standalone['spec']['template']['spec']['containers'][0]['image']
+        self.assertEqual(self.values['image'], image)
+        self.assertIn(':sha-' + self.source['spec']['ref']['commit'] + '@', image)
+        self.assertIs(self.flux['spec']['suspend'], True)
+        self.assertIs(self.release['spec']['suspend'], True)
+        self.assertEqual(self.values['replicas'], 0)
+        self.assertEqual(standalone['spec']['replicas'], 1)
+
     def test_existing_care_claim_plan_and_permissions_are_preserved(self):
         workers = {v['id']: v for v in self.values['workers']}
         self.assertEqual(set(workers), {'acorn', 'greenwich'})

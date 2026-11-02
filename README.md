@@ -255,7 +255,10 @@ The [separate bot repository](https://github.com/LionZXYOrg/acorn-care-bot) cont
 The bot sends shared care reminders to one Telegram topic.
 It saves each caregiver confirmation before it answers a button press.
 The planned meal times are `07:00`, `14:00`, and `19:00` in `Europe/London`.
-Wet food uses can fractions. Dry food uses grams.
+Wet and dry food portions use their exact stored weights in grams.
+Checklists, reminders, buttons, and transfer confirmations use the same unit.
+Old fraction-based text buttons still confirm only their original saved tasks.
+This display format does not change portions, stage dates, or the feeding schedule.
 
 The owners approved public storage of the chat, topic, caregiver IDs, and recurring care plan.
 `apps/acorn-care-bot/runtime.properties` contains the Telegram destination, numeric caregiver IDs, and the fresh-start setting.
