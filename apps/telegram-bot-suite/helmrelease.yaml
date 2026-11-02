@@ -68,7 +68,7 @@ spec:
   values:
     fullnameOverride: telegram-bot-suite
     replicas: 0
-    image: ghcr.io/lionzxyorg/acorn-care-bot:sha-321654cdc0964ab2a48ca424e436fc9c7e5b0d03@sha256:ca303e24858f3c615711cc6b5717ab3f3e71205401ac6ba7551ccea463010549
+    image: ghcr.io/lionzxyorg/acorn-care-bot:sha-b04434cb8a9cba54f59b87a9e4c1b2b9e285bd01@sha256:ada75dc6d267f9b4972e2bf5108833398dd7af53ef6e44a1839c60eb4e9a022f
     gateway:
       tokenSecret:
         name: acorn-care-bot
