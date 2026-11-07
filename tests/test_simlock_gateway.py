@@ -27,6 +27,10 @@ class SimlockGatewayTests(unittest.TestCase):
         self.assertTrue(container['securityContext']['readOnlyRootFilesystem'])
         self.assertIn('SIMLOCK_HOME', {e['name'] for e in container['env']})
         self.assertEqual(container['ports'][0]['containerPort'], 4700)
+        for workload in pod['initContainers'] + pod['containers']:
+            requests = workload['resources']['requests']
+            self.assertEqual(requests['cpu'], '50m')
+            self.assertNotIn('memory', requests)
 
     def test_lan_only_https_and_worker_outbound_uplink(self):
         route, middleware = self.load('apps/simlock/ingressroute.yaml')
