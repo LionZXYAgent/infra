@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simlock-gateway-start
+data:
+  start.sh: |
+    #!/bin/sh
+    set -eu
+    simlock --gateway config set http.host 0.0.0.0
+    simlock --gateway config set http.port 4700
+    simlock --gateway config set capabilities.agent-device.enabled true
+    simlock --gateway config set capabilities.tunnel.enabled true
+    simlock --gateway daemon start
+    trap 'simlock --gateway daemon stop || true; exit 0' TERM INT
+    while :; do
+      sleep 10 &
+      wait "$!"
+      simlock --gateway daemon status >/dev/null
+    done

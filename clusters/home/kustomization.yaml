@@ -18,3 +18,4 @@ resources:
   - birthday-reminder.yaml
   - replacevowelbot.yaml
   - localcontentshare.yaml
+  - simlock.yaml

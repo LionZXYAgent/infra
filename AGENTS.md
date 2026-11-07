@@ -98,3 +98,5 @@ Keep its read-only deploy key in the `secrets-main` environment.
 Restrict that environment to the `master` branch. Never move the key to a repository secret.
 Fetch only private commit history. Never download private trees or Secret files for this audit.
 Keep `Secrets main` required on `master`. Never publish success for a commit outside private `main`.
+
+For macOS-to-remote-Android workflow tasks, read `.agents/skills/remote-android-emulators/SKILL.md` before implementing or testing agent automation. Keep the gateway in K3s and emulator workers outside the cluster.

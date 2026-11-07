@@ -1,0 +1,25 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: simlock
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`simlock.kulikov.uk`)
+      middlewares:
+        - name: simlock-lan-only
+      services:
+        - name: simlock-gateway
+          port: 4700
+  tls: {}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: simlock-lan-only
+spec:
+  ipAllowList:
+    sourceRange:
+      - 192.168.1.0/24
