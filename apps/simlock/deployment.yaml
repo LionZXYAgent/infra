@@ -50,7 +50,6 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 128Mi
       containers:
         - name: gateway
           image: node:22.13.1-bookworm-slim
@@ -90,7 +89,6 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 128Mi
           volumeMounts:
             - name: package
               mountPath: /opt/simlock
