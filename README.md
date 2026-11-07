@@ -361,3 +361,103 @@ checksums under `tests/migrations/` may need manual refresh when versions change
 Because production Flux watches `master`, **merging a Renovate PR can deploy
 updated software to the live cluster**. Keep high-risk database, controller, and
 chart-major upgrades behind human review and backups.
+
+## Simlock: K3s gateway + Raspberry Pi 5 + Khadas Edge2
+
+### Assumptions
+
+- The existing K3s/Flux stack in this repository is machine 1; it runs the **gateway only**.
+- The Pi 5 and Edge2 use ARM64 Ubuntu and run native Simlock **workers**, not K3s workloads.
+- `simlock.kulikov.uk` resolves to the Traefik server from the LAN, and the existing wildcard TLS cert is valid.
+- `192.168.1.0/24` is the LAN subnet. Change it in `apps/simlock/ingressroute.yaml` if different.
+- Worker Android emulator support on Linux ARM64 is experimental: Google's standard host binaries are not Linux ARM64 builds. Prove a working emulator, arm64 system image, adb and KVM on EACH board before joining.
+
+### Gateway deployment
+
+This patch adds a Flux Kustomization and a namespace with a single gateway Deployment, Service,
+PVC, and Traefik IngressRoute. It uses `node:22.13.1-bookworm-slim`, installs pinned
+`simlock@0.6.0` from npm in an init container, and exposes port 4700 only via Traefik.
+No Android SDK, emulator, or `/dev/kvm` is installed on the manager.
+
+Before applying, consider replacing the runtime tag with a **digest-pinned**, prebuilt image
+containing simlock@0.6.0. The init-container npm download is suitable for testing but
+requires public npm registry reachability on every pod replacement.
+
+After applying the patch and merging it into master (Flux deploys automatically):
+
+```bash
+kubectl -n simlock rollout status deploy/simlock-gateway
+curl --fail https://simlock.kulikov.uk/v1/healthz
+kubectl -n simlock exec deploy/simlock-gateway -c gateway -- simlock --gateway worker list
+```
+
+Use DNS split-horizon or a local DNS record mapping `simlock.kulikov.uk` to the
+cluster's LAN-facing Traefik address, and ensure the ingress route is not exposed outside
+of the trusted LAN. The IP allowlist alone does not override a publicly exposed ingress.
+
+Create three tokens **inside the gateway pod** (commands print each secret once):
+
+```bash
+kubectl -n simlock exec deploy/simlock-gateway -c gateway --   simlock --gateway token create --role worker --label raspberry-pi-5
+kubectl -n simlock exec deploy/simlock-gateway -c gateway --   simlock --gateway token create --role worker --label khadas-edge2
+kubectl -n simlock exec deploy/simlock-gateway -c gateway --   simlock --gateway token create --role agent --label lan-automation
+kubectl -n simlock exec deploy/simlock-gateway -c gateway --   simlock --gateway token create --role operator --label lan-console
+```
+
+Do not save or commit token values to the public infra repo; store them in a password manager.
+The private infra-secrets repo is the only permitted repository location for secrets.
+The gateway state (including its token records) persists in the PVC.
+
+### On each worker: Pi 5 and Edge2
+
+Install Node.js >=22.13 and simlock@0.6.0, and separately validate a working native ARM64
+Android Emulator + platform-tools before joining. The previous single-board instructions
+cover that experimental emulator installation. Then:
+
+```bash
+npm install -g simlock@0.6.0
+simlock doctor
+simlock config set http.enabled false
+simlock config set android.emulator.headless true
+simlock config set android.emulator.audio false
+simlock config set android.emulator.gpu swiftshader_indirect
+simlock config set capacity '{"strategy":"fixed","config":{"maxRunning":1,"android":{"maxRunning":1,"maxDevices":1}}}'
+```
+
+Connect each board with **its own** token (and adjust the label):
+
+```bash
+read -rsp 'Worker join token: ' JOIN_TOKEN; echo
+LABEL=raspberry-pi-5  # use khadas-edge2 on the Khadas board
+CFG=$(jq -cn --arg url 'wss://simlock.kulikov.uk' --arg token "$JOIN_TOKEN" --arg label "$LABEL" '{url:$url,token:$token,label:$label}')
+simlock config set gateway "$CFG"
+unset JOIN_TOKEN CFG
+sudo loginctl enable-linger "$USER"
+simlock daemon install
+simlock daemon status
+```
+
+**Do not set `http.enabled=true` on a joined worker.** Workers maintain outbound
+WebSocket uplinks to the gateway and need no incoming firewall/ADB ports.
+Each board starts with capacity 1. Only increase concurrency after real RAM and boot tests.
+
+### Validate the fleet
+
+```bash
+kubectl -n simlock exec deploy/simlock-gateway -c gateway -- simlock --gateway worker list
+```
+
+Expected: `raspberry-pi-5` and `khadas-edge2` both connected, with Android
+capability available. Validate lease provisioning separately after both workers
+can boot ARM64 Android emulators.
+
+### Deployment notes
+
+- `local-path` storage is node-local; if the K3s host is rebuilt without restoring the PVC,
+  you will lose gateway token records and need to reissue worker/agent credentials.
+- Traefik automatically proxies WebSocket upgrades. Test SSE streaming and long-lived
+  requests end-to-end if you have strict upstream idle timeouts.
+- This is an experimental image-on-start gateway deployment; for production,
+  build and push a pinned immutable image and update the Deployment.
+- `simlock --gateway` (not `mode: gateway`) is the current mode selector.
+- If worker logs show `incompatible`, ensure gateway and both workers run the same Simlock version.

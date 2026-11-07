@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simlock-gateway
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: simlock-gateway
+  template:
+    metadata:
+      labels:
+        app: simlock-gateway
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      # No Android SDK, /dev/kvm, or privileged containers on the gateway.
+      initContainers:
+        - name: install-simlock
+          image: node:22.13.1-bookworm-slim
+          command: [/bin/sh, -ec]
+          args:
+            - npm install --prefix /opt/simlock --no-audit --no-fund --omit=dev simlock@0.6.0
+          env:
+            - name: HOME
+              value: /tmp
+            - name: npm_config_cache
+              value: /tmp/npm-cache
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: package
+              mountPath: /opt/simlock
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+      containers:
+        - name: gateway
+          image: node:22.13.1-bookworm-slim
+          command: [/bin/sh, /etc/simlock/start.sh]
+          env:
+            - name: HOME
+              value: /data
+            - name: SIMLOCK_HOME
+              value: /data
+            - name: PATH
+              value: /opt/simlock/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          ports:
+            - name: http
+              containerPort: 4700
+          startupProbe:
+            httpGet:
+              path: /v1/healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /v1/healthz
+              port: http
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/healthz
+              port: http
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+          volumeMounts:
+            - name: package
+              mountPath: /opt/simlock
+              readOnly: true
+            - name: state
+              mountPath: /data
+            - name: configuration
+              mountPath: /etc/simlock
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: package
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: state
+          persistentVolumeClaim:
+            claimName: simlock-gateway-state
+        - name: configuration
+          configMap:
+            name: simlock-gateway-start
+            defaultMode: 0444
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
