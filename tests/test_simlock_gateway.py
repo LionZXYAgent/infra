@@ -33,7 +33,10 @@ class SimlockGatewayTests(unittest.TestCase):
             self.assertNotIn('memory', requests)
 
     def test_lan_only_https_and_worker_outbound_uplink(self):
-        route, middleware = self.load('apps/simlock/ingressroute.yaml')
+        route = self.load('apps/simlock/ingressroute.yaml')[0]
+        middleware = self.load('apps/simlock/middleware.yaml')[0]
+        self.assertEqual(route['kind'], 'IngressRoute')
+        self.assertEqual(middleware['kind'], 'Middleware')
         self.assertEqual(middleware['spec']['ipAllowList']['sourceRange'],
                          ['192.168.1.0/24'])
         self.assertEqual(route['spec']['entryPoints'], ['websecure'])

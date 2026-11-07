@@ -12,7 +12,7 @@ resources:
 - obsidian.yaml
 - psybot.yaml
 - replacevowelbot.yaml
+- simlock.yaml
 - traefik.yaml
 - transfersh.yaml
 - warden.yaml
-- simlock.yaml

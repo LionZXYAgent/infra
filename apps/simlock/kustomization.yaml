@@ -7,3 +7,4 @@ resources:
   - service.yaml
   - storage.yaml
   - ingressroute.yaml
+  - middleware.yaml
