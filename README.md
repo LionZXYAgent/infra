@@ -447,20 +447,9 @@ Each board starts with capacity 1. Only increase concurrency after real RAM and 
 kubectl -n simlock exec deploy/simlock-gateway -c gateway -- simlock --gateway worker list
 ```
 
-Expected: `raspberry-pi-5` and `khadas-edge2` both connected, Android capability
-available. On a client in the LAN:
-
-```bash
-export SIMLOCK_URL=https://simlock.kulikov.uk
-read -rsp 'Agent token: ' SIMLOCK_TOKEN; echo
-curl -fsS "$SIMLOCK_URL/v1/healthz" | jq .
-curl -fsS -X POST "$SIMLOCK_URL/v1/lease-requests"   -H "Authorization: Bearer $SIMLOCK_TOKEN" -H 'Content-Type: application/json'   -d '{"platform":"android","os":"35","ttlMs":900000}' | jq .
-```
-
-A lease can be queued/provisioning rather than granted immediately; poll its
-`/v1/lease-requests/{request-id}` state before trying `/v1/leases/{lease-id}/exec`.
-You cannot force the gateway to choose a specific board in a normal lease request;
-it routes to a worker with a warm device or spare capacity.
+Expected: `raspberry-pi-5` and `khadas-edge2` both connected, with Android
+capability available. Validate lease provisioning separately after both workers
+can boot ARM64 Android emulators.
 
 ### Deployment notes
 
@@ -472,6 +461,3 @@ it routes to a worker with a warm device or spare capacity.
   build and push a pinned immutable image and update the Deployment.
 - `simlock --gateway` (not `mode: gateway`) is the current mode selector.
 - If worker logs show `incompatible`, ensure gateway and both workers run the same Simlock version.
-### Mac-based coding agents
-
-The remote Android skill is versioned in `.agents/skills/remote-android-emulators/`. Install it on a trusted macOS machine with `mkdir -p ~/.agents/skills && cp -R .agents/skills/remote-android-emulators ~/.agents/skills/` from a checked-out copy of this repository. Supply gateway-issued agent tokens from a local secret store, not a repository file. Simlock v0.6.0 does not include native ADB tunnel or lease-file upload support; use `agent-device` for local APK upload and UI automation. The skill has a lightweight Python 3 HTTP helper for lease management.
