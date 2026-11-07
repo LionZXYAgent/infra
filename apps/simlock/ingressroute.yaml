@@ -8,8 +8,6 @@ spec:
   routes:
     - kind: Rule
       match: Host(`simlock.kulikov.uk`)
-      middlewares:
-        - name: simlock-lan-only
       services:
         - name: simlock-gateway
           port: 4700

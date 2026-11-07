@@ -368,8 +368,8 @@ chart-major upgrades behind human review and backups.
 
 - The existing K3s/Flux stack in this repository is machine 1; it runs the **gateway only**.
 - The Pi 5 and Edge2 use ARM64 Ubuntu and run native Simlock **workers**, not K3s workloads.
-- `simlock.kulikov.uk` resolves to the Traefik server from the LAN, and the existing wildcard TLS cert is valid.
-- `192.168.1.0/24` is the LAN subnet. Change it in `apps/simlock/ingressroute.yaml` if different.
+- `simlock.kulikov.uk` resolves from external networks to the Traefik HTTPS endpoint (with split-horizon DNS for LAN clients if needed), and the existing wildcard TLS certificate is valid.
+- The gateway ingress has no client IP allowlist; requests are protected by Simlock's own role-based bearer tokens.
 - Worker Android emulator support on Linux ARM64 is experimental: Google's standard host binaries are not Linux ARM64 builds. Prove a working emulator, arm64 system image, adb and KVM on EACH board before joining.
 
 ### Gateway deployment
@@ -391,17 +391,31 @@ curl --fail https://simlock.kulikov.uk/v1/healthz
 kubectl -n simlock exec deploy/simlock-gateway -c gateway -- simlock --gateway worker list
 ```
 
-Use DNS split-horizon or a local DNS record mapping `simlock.kulikov.uk` to the
-cluster's LAN-facing Traefik address, and ensure the ingress route is not exposed outside
-of the trusted LAN. The IP allowlist alone does not override a publicly exposed ingress.
+To make the gateway reachable from any network, publish a public DNS A/AAAA record
+for `simlock.kulikov.uk` pointing to the publicly reachable Traefik ingress address.
+Forward TCP 443 at the edge router/firewall to Traefik if the cluster is behind NAT;
+use split-horizon DNS for local clients if hairpin NAT is unavailable. If inbound
+connections cannot reach the cluster (such as with CGNAT), provide a compatible
+TLS reverse tunnel that supports both WebSockets and long-lived HTTP streams.
+Keep Simlock's internal port 4700 and the workers' ADB ports private; only
+Traefik's HTTPS entrypoint should be public. HTTP must not be exposed directly.
+
+**Security:** this intentionally exposes the Simlock gateway API and login page to
+untrusted networks. Simlock enforces role-based bearer-token access, but an agent
+token can execute commands on a leased worker and has the worker daemon user's
+filesystem permissions. Issue a unique token per agent/worker, store tokens securely,
+revoke compromised tokens immediately, and do not add an anonymous authentication
+bypass. Consider additional edge rate limiting and monitoring before relying on
+this service for public Internet access. Do not put an interactive login proxy
+in front of the worker WebSocket uplink unless it can authenticate machine clients.
 
 Create three tokens **inside the gateway pod** (commands print each secret once):
 
 ```bash
 kubectl -n simlock exec deploy/simlock-gateway -c gateway --   simlock --gateway token create --role worker --label raspberry-pi-5
 kubectl -n simlock exec deploy/simlock-gateway -c gateway --   simlock --gateway token create --role worker --label khadas-edge2
-kubectl -n simlock exec deploy/simlock-gateway -c gateway --   simlock --gateway token create --role agent --label lan-automation
-kubectl -n simlock exec deploy/simlock-gateway -c gateway --   simlock --gateway token create --role operator --label lan-console
+kubectl -n simlock exec deploy/simlock-gateway -c gateway --   simlock --gateway token create --role agent --label remote-automation
+kubectl -n simlock exec deploy/simlock-gateway -c gateway --   simlock --gateway token create --role operator --label remote-console
 ```
 
 Do not save or commit token values to the public infra repo; store them in a password manager.

@@ -1,4 +1,4 @@
-"""Simlock gateway is a LAN-only control plane with no emulator privileges."""
+"""Simlock gateway uses authenticated public TLS ingress without emulator privileges."""
 from pathlib import Path
 import unittest
 import yaml
@@ -32,18 +32,17 @@ class SimlockGatewayTests(unittest.TestCase):
             self.assertEqual(requests['cpu'], '50m')
             self.assertNotIn('memory', requests)
 
-    def test_lan_only_https_and_worker_outbound_uplink(self):
+    def test_public_https_and_worker_outbound_uplink(self):
         route = self.load('apps/simlock/ingressroute.yaml')[0]
-        middleware = self.load('apps/simlock/middleware.yaml')[0]
         self.assertEqual(route['kind'], 'IngressRoute')
-        self.assertEqual(middleware['kind'], 'Middleware')
-        self.assertEqual(middleware['spec']['ipAllowList']['sourceRange'],
-                         ['192.168.1.0/24'])
+        self.assertEqual(route['spec']['tls'], {})
+        self.assertNotIn('middleware.yaml',
+                         self.load('apps/simlock/kustomization.yaml')[0]['resources'])
+        self.assertFalse((ROOT / 'apps/simlock/middleware.yaml').exists())
         self.assertEqual(route['spec']['entryPoints'], ['websecure'])
         self.assertEqual(route['spec']['routes'][0]['match'],
                          'Host(`simlock.kulikov.uk`)')
-        self.assertEqual(route['spec']['routes'][0]['middlewares'][0]['name'],
-                         'simlock-lan-only')
+        self.assertNotIn('middlewares', route['spec']['routes'][0])
         self.assertEqual(route['spec']['routes'][0]['services'][0]['port'], 4700)
         self.assertEqual(self.load('apps/simlock/service.yaml')[0]['spec']['type'],
                          'ClusterIP')
