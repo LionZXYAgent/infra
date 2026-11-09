@@ -174,6 +174,22 @@ class DeploymentTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'production'):
                     self.runner.verify_no_production_resources()
 
+    def test_unlisted_workload_namespaces_fail_isolation(self):
+        for namespace in ('demo', 'shared-production'):
+            def kube(args, **kwargs):
+                if 'clusterissuers,issuers' in args or 'certificates' in args:
+                    return b'{"items":[]}'
+                if 'secrets' in args:
+                    return b''
+                return json.dumps({'items': [{'kind': 'Deployment', 'metadata': {
+                    'name': 'example', 'namespace': namespace}}]}).encode()
+            with self.subTest(namespace=namespace), patch.object(self.runner, 'kube', side_effect=kube):
+                if namespace == 'demo':
+                    self.runner.verify_no_production_resources()
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'production workload'):
+                        self.runner.verify_no_production_resources()
+
     def test_diagnostics_exclude_messages_annotations_and_secret_data(self):
         objects = [{'kind': 'Secret', 'data': {'token': 'sentinel'},
                     'metadata': {'name': 'probe', 'annotations': {'raw': 'sentinel'}},

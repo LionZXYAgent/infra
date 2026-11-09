@@ -107,34 +107,21 @@ class FixtureTests(unittest.TestCase):
                 self.git('rm', '--cached', name)
                 path.unlink()
 
-    def test_acorn_fixture_includes_only_suspended_flux_reference(self):
+    def test_unlisted_applications_cannot_enter_disposable_fixture(self):
         cluster = self.source / 'clusters/home'
         cluster.mkdir(parents=True)
-        application = cluster / 'acorn-care-bot.yaml'
-        application.write_text('apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\n'
-                               'metadata: {name: acorn-care-bot, namespace: flux-system}\n'
-                               'spec: {suspend: true, path: ./apps/acorn-care-bot}\n')
+        for name, suspended in [('prepared-example', True), ('active-example', False)]:
+            (cluster / (name + '.yaml')).write_text(yaml.safe_dump({
+                'apiVersion': 'kustomize.toolkit.fluxcd.io/v1', 'kind': 'Kustomization',
+                'metadata': {'name': name, 'namespace': 'flux-system'},
+                'spec': {'suspend': suspended, 'path': './apps/' + name}}))
         self.git('add', '.')
         fixture = self.fixture()
         isolated = fixture.infra_path / 'tests/isolated'
         configuration = yaml.safe_load((isolated / 'kustomization.yaml').read_text())
-        self.assertEqual(configuration['resources'], ['secrets-source.yaml', 'acorn-care-bot.yaml'])
-        copied = yaml.safe_load((isolated / 'acorn-care-bot.yaml').read_text())
-        self.assertEqual(copied['metadata']['name'], 'acorn-care-bot')
-        self.assertEqual(copied['spec']['path'], './apps/acorn-care-bot')
-        self.assertIs(copied['spec']['suspend'], True)
-        self.assertFalse((isolated / 'apps').exists())
-
-    def test_active_acorn_bot_cannot_enter_disposable_fixture(self):
-        cluster = self.source / 'clusters/home'
-        cluster.mkdir(parents=True)
-        (cluster / 'acorn-care-bot.yaml').write_text('spec: {suspend: false}\n')
-        self.git('add', '.')
-        fixture = self.fixture()
-        isolated = fixture.infra_path / 'tests/isolated'
-        configuration = yaml.safe_load((isolated / 'kustomization.yaml').read_text())
-        self.assertNotIn('acorn-care-bot.yaml', configuration['resources'])
-        self.assertFalse((isolated / 'acorn-care-bot.yaml').exists())
+        self.assertEqual(configuration['resources'], ['secrets-source.yaml'])
+        self.assertFalse((isolated / 'prepared-example.yaml').exists())
+        self.assertFalse((isolated / 'active-example.yaml').exists())
         self.assertFalse((isolated / 'apps').exists())
 
     def test_active_migration_cannot_enter_disposable_fixture(self):
