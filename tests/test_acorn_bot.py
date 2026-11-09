@@ -83,12 +83,14 @@ class AcornManifestTests(unittest.TestCase):
         self.assertEqual([slot['time'] for slot in config['slots']], ['07:00', '14:00', '19:00'])
         self.assertEqual(config['food_transfer_policy'], 'add_full')
         self.assertEqual(config['start_date'], '2026-10-19')
-        self.assertEqual([stage['start'] for stage in config['stages']],
-                         ['2026-10-19', '2026-11-02', '2026-11-09', '2026-11-16'])
-        self.assertEqual([stage['wet'] for stage in config['stages']],
-                         [[49, 49, 97], [33, 32, 65], [0, 0, 65], [0, 0, 0]])
-        self.assertEqual([stage['dry'] for stage in config['stages']],
-                         [[10, 10, 10], [15, 15, 16], [21, 20, 21], [26, 26, 26]])
+        self.assertEqual([stage['start'] for stage in config['stages'][:2]],
+                         ['2026-10-19', '2026-11-02'])
+        self.assertEqual([stage['wet'] for stage in config['stages'][:2]],
+                         [[49, 49, 97], [33, 32, 65]])
+        self.assertEqual([stage['dry'] for stage in config['stages'][:2]],
+                         [[10, 10, 10], [15, 15, 16]])
+        self.assertEqual(config['stages'][2:], config['nutrition_plan']['stages'])
+        self.assertEqual(config['nutrition_plan_id'], 'nutrition-2026-11-09-r2')
         for stage in config['stages']:
             self.assertEqual(sum(stage['wet']), stage['daily_wet'])
             self.assertEqual(sum(stage['dry']), stage['daily_dry'])
@@ -125,8 +127,8 @@ class AcornManifestTests(unittest.TestCase):
         self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
         self.assertNotIn('imagePullSecrets', self.pod)
         self.assertEqual(self.container['image'],
-                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-b04434cb8a9cba54f59b87a9e4c1b2b9e285bd01'
-                         '@sha256:ada75dc6d267f9b4972e2bf5108833398dd7af53ef6e44a1839c60eb4e9a022f')
+                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-6db3fab40a7bbc59ccc01c2310128ef6eae98f03'
+                         '@sha256:4ef10858647eb4c731f4188ebcd71c5861f1e4bbf72d9ff209b41aaaa20dc093')
         volume = read(APP / 'storage.yaml')
         self.assertEqual(volume['metadata']['name'], 'acorn-care-bot-state')
         self.assertEqual(volume['spec']['accessModes'], ['ReadWriteOnce'])
