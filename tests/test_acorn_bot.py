@@ -90,12 +90,12 @@ class AcornManifestTests(unittest.TestCase):
         self.assertEqual([stage['dry'] for stage in config['stages'][:2]],
                          [[10, 10, 10], [15, 15, 16]])
         self.assertEqual(config['stages'][2:], config['nutrition_plan']['stages'])
-        self.assertEqual(config['nutrition_plan_id'], 'nutrition-2026-11-09-r2')
+        self.assertEqual(config['nutrition_plan_id'], 'nutrition-2026-11-09-r3')
         for stage in config['stages']:
             self.assertEqual(sum(stage['wet']), stage['daily_wet'])
             self.assertEqual(sum(stage['dry']), stage['daily_dry'])
         self.assertEqual(config['wet_can_grams'], 195)
-        self.assertEqual(config['slots'][2]['cleaning_tasks'], ['litter'])
+        self.assertEqual(config['slots'][2]['cleaning_tasks'], ['litter', 'bowls', 'water'])
         for key in ('tasks', 'checklists', 'carryovers', 'audit', 'standalone', 'inline_panels',
                     'emissions', 'progression_hold', 'proposals', 'created_by', 'source_message', 'destination'):
             self.assertNotIn(key, config)
@@ -109,14 +109,14 @@ class AcornManifestTests(unittest.TestCase):
         self.assertEqual(self.spec['replicas'], 1)
         self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
 
-    def test_bowls_and_wiping_are_morning_only_without_changing_other_care(self):
+    def test_revised_care_includes_evening_bowls_and_water_check(self):
         config = json.loads((APP / 'config.json').read_text())
-        self.assertIs(config['bowls_morning_only'], True)
+        self.assertIs(config['bowls_morning_only'], False)
         defaults = ['litter', 'bowls', 'water']
         cleaning = {slot['key']: slot.get('cleaning_tasks', defaults) if slot['cleaning'] else []
                     for slot in config['slots']}
         self.assertEqual(cleaning, {'breakfast': ['litter', 'bowls', 'water'],
-                                   'lunch': [], 'dinner': ['litter']})
+                                   'lunch': [], 'dinner': ['litter', 'bowls', 'water']})
         self.assertEqual(config['food_transfer_policy'], 'add_full')
         self.assertIs(config['automatic_repeats'], False)
         self.assertEqual([slot['time'] for slot in config['slots']], ['07:00', '14:00', '19:00'])
@@ -127,8 +127,8 @@ class AcornManifestTests(unittest.TestCase):
         self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
         self.assertNotIn('imagePullSecrets', self.pod)
         self.assertEqual(self.container['image'],
-                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-6db3fab40a7bbc59ccc01c2310128ef6eae98f03'
-                         '@sha256:4ef10858647eb4c731f4188ebcd71c5861f1e4bbf72d9ff209b41aaaa20dc093')
+                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-9e17b1e60d0ea85b569ebc6f41a5d0ecc1b7a448'
+                         '@sha256:e757227da244a36736bfa24094e8a1afaffb950685c5b337cb51fd9fcc6f190d')
         volume = read(APP / 'storage.yaml')
         self.assertEqual(volume['metadata']['name'], 'acorn-care-bot-state')
         self.assertEqual(volume['spec']['accessModes'], ['ReadWriteOnce'])
