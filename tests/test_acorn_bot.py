@@ -90,7 +90,7 @@ class AcornManifestTests(unittest.TestCase):
         self.assertEqual([stage['dry'] for stage in config['stages'][:2]],
                          [[10, 10, 10], [15, 15, 16]])
         self.assertEqual(config['stages'][2:], config['nutrition_plan']['stages'])
-        self.assertEqual(config['nutrition_plan_id'], 'nutrition-2026-11-09-r3')
+        self.assertEqual(config['nutrition_plan_id'], 'nutrition-2026-11-09-r4')
         for stage in config['stages']:
             self.assertEqual(sum(stage['wet']), stage['daily_wet'])
             self.assertEqual(sum(stage['dry']), stage['daily_dry'])

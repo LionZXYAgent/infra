@@ -8,15 +8,15 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_PORTIONS = [
-    ('2026-11-09', [43, 43, 44], [0, 0, 0], [15, 15, 16], [0, 0, 0]),
-    ('2026-11-20', [33, 33, 34], [7, 7, 6], [16, 16, 16], [0, 0, 0]),
-    ('2026-11-23', [22, 21, 22], [13, 14, 13], [17, 17, 18], [0, 0, 0]),
-    ('2026-11-26', [11, 11, 11], [20, 20, 20], [18, 18, 19], [0, 0, 0]),
-    ('2026-11-28', [0, 0, 0], [28, 28, 29], [19, 19, 19], [0, 0, 0]),
-    ('2026-11-30', [0, 0, 0], [28, 28, 29], [14, 14, 15], [5, 5, 5]),
-    ('2026-12-03', [0, 0, 0], [28, 28, 29], [10, 9, 10], [10, 10, 10]),
-    ('2026-12-06', [0, 0, 0], [28, 28, 29], [5, 4, 5], [15, 15, 15]),
-    ('2026-12-09', [0, 0, 0], [28, 28, 29], [0, 0, 0], [20, 20, 20]),
+    ('2026-11-09', [22, 21, 22], [0, 0, 0], [21, 20, 21], [0, 0, 0]),
+    ('2026-11-20', [16, 16, 17], [7, 7, 7], [20, 20, 21], [0, 0, 0]),
+    ('2026-11-23', [11, 11, 11], [14, 14, 15], [20, 20, 20], [0, 0, 0]),
+    ('2026-11-26', [5, 5, 6], [21, 21, 22], [20, 20, 20], [0, 0, 0]),
+    ('2026-11-28', [0, 0, 0], [28, 28, 29], [20, 19, 20], [0, 0, 0]),
+    ('2026-11-30', [0, 0, 0], [28, 28, 29], [15, 14, 15], [5, 5, 6]),
+    ('2026-12-03', [0, 0, 0], [28, 28, 29], [10, 10, 10], [10, 10, 11]),
+    ('2026-12-06', [0, 0, 0], [28, 28, 29], [5, 5, 5], [16, 15, 16]),
+    ('2026-12-09', [0, 0, 0], [28, 28, 29], [0, 0, 0], [21, 21, 21]),
 ]
 
 
@@ -38,10 +38,10 @@ class AcornNutritionTransitionTests(unittest.TestCase):
 
     def test_exact_products_package_sizes_and_approval(self):
         self.assertEqual(self.plan['id'], self.config['nutrition_plan_id'])
-        self.assertEqual(self.plan['id'], 'nutrition-2026-11-09-r3')
-        self.assertEqual(self.plan['approved_message'], 'telegram_-1004424243504_602')
+        self.assertEqual(self.plan['id'], 'nutrition-2026-11-09-r4')
+        self.assertEqual(self.plan['approved_message'], 'telegram_-1004424243504_604')
         self.assertEqual(self.plan['approved_by'], 'palmette')
-        self.assertEqual(self.plan['approved_at'], '2026-11-09T10:47:58+00:00')
+        self.assertEqual(self.plan['approved_at'], '2026-11-09T11:30:51+00:00')
         self.assertEqual(self.plan['effective'], '2026-11-09')
         self.assertEqual(self.config['food_products'], self.plan['food_products'])
         products = self.plan['food_products']
