@@ -11,6 +11,7 @@ resources:
   - obsidian.yaml
   - warden.yaml
   - homeassist.yaml
+  - acorn-care-bot-source.yaml
   - acorn-care-bot.yaml
   - telegram-bot-suite.yaml
   - copyparty.yaml

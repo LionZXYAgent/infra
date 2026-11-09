@@ -112,6 +112,12 @@ class Deployment:
                           'jsonpath={range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{"\\n"}{end}'])
         if b'cloudflare-api-token' in names:
             raise RuntimeError('Unexpected production Cloudflare Secret in isolated deployment')
+        workloads = json.loads(self.kube([
+            'get', 'pods,deployments,statefulsets,daemonsets,jobs,cronjobs,helmreleases',
+            '-A', '-o', 'json']))['items']
+        allowed_namespaces = {'kube-system', 'flux-system', 'traefik', 'cert-manager', 'demo', 'k3s-mcp'}
+        if any(obj['metadata'].get('namespace') not in allowed_namespaces for obj in workloads):
+            raise RuntimeError('Unexpected production workload in isolated deployment')
 
     def verify_ready(self):
         for name in ('flux-system', 'infra-secrets'):
@@ -124,25 +130,6 @@ class Deployment:
         self.kube(['-n', 'demo', 'rollout', 'status', 'deployment/demo', '--timeout=180s'])
         self.wait('helmrelease', 'k3s-mcp', 'k3s-mcp')
         self.wait('certificate', 'mcp-lan', 'k3s-mcp')
-
-    def verify_suspended_application(self, fixture, name):
-        source = fixture.infra_path / 'clusters/home' / (name + '.yaml')
-        if not source.exists():
-            return
-        configuration = yaml.safe_load(source.read_text())
-        if configuration['spec'].get('suspend') is False:
-            objects = json.loads(self.kube(['-n', 'flux-system', 'get', 'kustomizations',
-                '--field-selector=metadata.name=' + name, '-o', 'json']))
-            if objects['items']:
-                raise RuntimeError('Active production application entered the disposable cluster')
-        else:
-            obj = json.loads(self.kube(['-n', 'flux-system', 'get', 'kustomization', name, '-o', 'json']))
-            if obj['spec'].get('suspend') is not True:
-                raise RuntimeError('Prepared application became active')
-        namespace = configuration['spec'].get('targetNamespace', name)
-        resources = json.loads(self.kube(['-n', namespace, 'get', 'pods,deployments,statefulsets,jobs,cronjobs,helmreleases', '-o', 'json']))
-        if resources['items']:
-            raise RuntimeError('Prepared application started workloads')
 
     def verify_memory_resources(self):
         for namespace in ('flux-system', 'traefik', 'cert-manager', 'demo', 'k3s-mcp'):
@@ -159,9 +146,6 @@ class Deployment:
                             raise RuntimeError('Deployed container has memory requests or limits')
 
     def verify_migrations_suspended(self, fixture):
-        self.verify_suspended_application(fixture, 'acorn-care-bot')
-        if (fixture.infra_path / 'clusters/home/telegram-bot-suite.yaml').exists():
-            self.verify_suspended_application(fixture, 'telegram-bot-suite')
         for contract in sorted((fixture.infra_path / 'tests/migrations').glob('*.yaml')):
             name = contract.stem
             configuration = yaml.safe_load(contract.read_text())

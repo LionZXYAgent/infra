@@ -55,3 +55,7 @@ Build the fixtures with `kubectl kustomize tests/isolated`,
 `kubectl kustomize tests/isolated/tls`, and
 `kubectl kustomize tests/isolated/demo`. Production DNS/ACME and the workstation
 SSH wrapper are outside this test's scope.
+
+The fixture uses an explicit resource list. It does not copy production application references, even when they are suspended.
+The deployment runner rejects workloads outside the fixture namespaces during initial and repeat reconciliation.
+Application repositories own their deployment rendering and application tests.

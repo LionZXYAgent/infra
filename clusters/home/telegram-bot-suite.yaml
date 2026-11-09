@@ -4,19 +4,30 @@ metadata:
   name: telegram-bot-suite
   namespace: flux-system
 spec:
-  # Keep both this resource and the zero-replica Deployment inactive until cutover.
   suspend: true
   dependsOn:
-    - name: infra-namespaces
-    - name: cluster-secrets
+  - name: infra-namespaces
+  - name: cluster-secrets
   interval: 1m
   retryInterval: 30s
   timeout: 5m
-  path: ./apps/telegram-bot-suite
+  path: ./deploy/suite
   targetNamespace: acorn-care-bot
   prune: true
   deletionPolicy: Orphan
   wait: true
   sourceRef:
     kind: GitRepository
-    name: flux-system
+    name: acorn-care-bot
+  patches:
+  - target:
+      kind: HelmRelease
+      name: telegram-bot-suite
+    patch: |
+      apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      metadata:
+        name: telegram-bot-suite
+      spec:
+        values:
+          image: ghcr.io/lionzxyorg/acorn-care-bot:sha-e332866f261b1f24d1c8495a0334995b4d26dac5@sha256:9db9bc684576b6ae81441b1ea84533180ce455ad579ce68384e4c2aeae562a5c

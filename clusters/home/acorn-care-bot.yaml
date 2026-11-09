@@ -4,18 +4,22 @@ metadata:
   name: acorn-care-bot
   namespace: flux-system
 spec:
-  # The pinned image is public. Stop the old reminder scheduler before activation.
   suspend: false
   dependsOn:
-    - name: infra-namespaces
-    - name: cluster-secrets
+  - name: infra-namespaces
+  - name: cluster-secrets
   interval: 1m
   retryInterval: 30s
   timeout: 5m
-  path: ./apps/acorn-care-bot
+  path: ./deploy/standalone
   prune: true
   deletionPolicy: Orphan
   wait: true
   sourceRef:
     kind: GitRepository
-    name: flux-system
+    name: acorn-care-bot
+  targetNamespace: acorn-care-bot
+  images:
+  - name: ghcr.io/lionzxyorg/acorn-care-bot
+    newTag: sha-e332866f261b1f24d1c8495a0334995b4d26dac5
+    digest: sha256:9db9bc684576b6ae81441b1ea84533180ce455ad579ce68384e4c2aeae562a5c

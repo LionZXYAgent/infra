@@ -2,10 +2,8 @@
 from pathlib import Path
 import subprocess
 import sys
-import tarfile
 import tempfile
 import unittest
-import urllib.request
 
 import yaml
 
@@ -100,32 +98,3 @@ class MemoryResourceTests(unittest.TestCase):
                 args += ['--namespace', release['metadata']['namespace'], '-f', str(values)]
                 result = subprocess.run(args, capture_output=True, check=True, timeout=120)
                 self.assert_no_memory(list(yaml.safe_load_all(result.stdout)))
-
-    def test_pinned_telegram_chart_patch_covers_workers_gateway_and_seed(self):
-        app = ROOT / 'apps/telegram-bot-suite'
-        source = migration.load(app / 'source.yaml')['spec']
-        release = migration.load(app / 'helmrelease.yaml')['spec']
-        revision = source['ref']['commit']
-        prefix = f'acorn-care-bot-{revision}/charts/telegram-bot-suite/'
-        with tempfile.TemporaryDirectory() as directory:
-            work = Path(directory)
-            archive = work / 'source.tar.gz'
-            url = f'https://codeload.github.com/LionZXYOrg/acorn-care-bot/tar.gz/{revision}'
-            with urllib.request.urlopen(url, timeout=60) as response:
-                archive.write_bytes(response.read())
-            with tarfile.open(archive) as bundle:
-                bundle.extractall(work, members=[member for member in bundle.getmembers()
-                                  if member.name.startswith(prefix)], filter='data')
-            values = work / 'values.yaml'
-            values.write_text(yaml.safe_dump(release['values']))
-            result = subprocess.run(['helm', 'template', release['releaseName'], str(work / prefix),
-                                     '-f', str(values)], capture_output=True, check=True, timeout=60)
-            (work / 'rendered.yaml').write_bytes(result.stdout)
-            (work / 'kustomization.yaml').write_text(yaml.safe_dump({
-                'apiVersion': 'kustomize.config.k8s.io/v1beta1', 'kind': 'Kustomization',
-                'resources': ['rendered.yaml'], **release['postRenderers'][0]['kustomize']}))
-            inspected = self.assert_no_memory(self.build(work))
-            self.assertEqual({c['name'] for c in inspected}, {'acorn', 'greenwich', 'gateway', 'seed-gateway'})
-            for container in inspected:
-                self.assertEqual(container['resources'],
-                                 {'requests': {'cpu': '10m'}, 'limits': {'cpu': '250m'}})
