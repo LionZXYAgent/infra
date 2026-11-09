@@ -8,15 +8,15 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_PORTIONS = [
-    ('2026-11-09', [22, 21, 22], [0, 0, 0], [21, 20, 21], [0, 0, 0]),
-    ('2026-11-20', [16, 16, 17], [7, 7, 7], [20, 20, 21], [0, 0, 0]),
-    ('2026-11-23', [11, 11, 11], [14, 14, 15], [20, 20, 20], [0, 0, 0]),
-    ('2026-11-26', [5, 5, 6], [21, 21, 22], [20, 20, 20], [0, 0, 0]),
-    ('2026-11-28', [0, 0, 0], [28, 28, 29], [20, 19, 20], [0, 0, 0]),
-    ('2026-11-30', [0, 0, 0], [28, 28, 29], [15, 14, 15], [5, 5, 6]),
-    ('2026-12-03', [0, 0, 0], [28, 28, 29], [10, 10, 10], [10, 10, 11]),
-    ('2026-12-06', [0, 0, 0], [28, 28, 29], [5, 5, 5], [16, 15, 16]),
-    ('2026-12-09', [0, 0, 0], [28, 28, 29], [0, 0, 0], [21, 21, 21]),
+    ('2026-11-10', [32, 32, 65], [0, 0, 0], [15, 15, 16], [0, 0, 0]),
+    ('2026-11-30', [23, 23, 45], [11, 11, 21], [15, 15, 16], [0, 0, 0]),
+    ('2026-12-02', [16, 16, 33], [21, 21, 43], [14, 14, 15], [0, 0, 0]),
+    ('2026-12-04', [10, 10, 20], [32, 32, 64], [13, 13, 13], [0, 0, 0]),
+    ('2026-12-05', [41, 0, 0], [16, 48, 64], [13, 13, 13], [0, 0, 0]),
+    ('2026-12-06', [0, 0, 0], [43, 42, 85], [10, 10, 11], [3, 3, 3]),
+    ('2026-12-08', [0, 0, 0], [43, 42, 85], [7, 7, 7], [6, 7, 7]),
+    ('2026-12-10', [0, 0, 0], [43, 42, 85], [3, 3, 4], [11, 11, 10]),
+    ('2026-12-12', [0, 0, 0], [43, 42, 85], [0, 0, 0], [14, 14, 14]),
 ]
 
 
@@ -32,38 +32,38 @@ class AcornNutritionTransitionTests(unittest.TestCase):
             for kind, amounts in zip(('wet', 'wet_new', 'dry', 'dry_new'), expected[1:]):
                 self.assertEqual(stage[kind], amounts, (stage['start'], kind))
                 self.assertEqual(stage['daily_' + kind], sum(amounts), (stage['start'], kind))
-        self.assertEqual(self.config['stages'][2:], stages)
+        self.assertEqual(self.config['stages'][3:], stages)
         self.assertFalse(any(stage.get('provisional') for stage in self.config['stages']))
         self.assertNotIn('week_5_plus', [stage['id'] for stage in self.config['stages']])
 
     def test_exact_products_package_sizes_and_approval(self):
         self.assertEqual(self.plan['id'], self.config['nutrition_plan_id'])
-        self.assertEqual(self.plan['id'], 'nutrition-2026-11-09-r4')
-        self.assertEqual(self.plan['approved_message'], 'telegram_-1004424243504_604')
+        self.assertEqual(self.plan['id'], 'nutrition-2026-11-09-r5')
+        self.assertEqual(self.plan['approved_message'], 'telegram_-1004424243504_634')
         self.assertEqual(self.plan['approved_by'], 'palmette')
-        self.assertEqual(self.plan['approved_at'], '2026-11-09T11:30:51+00:00')
-        self.assertEqual(self.plan['effective'], '2026-11-09')
+        self.assertEqual(self.plan['approved_at'], '2026-11-09T21:57:31+00:00')
+        self.assertEqual(self.plan['effective'], '2026-11-10')
         self.assertEqual(self.config['food_products'], self.plan['food_products'])
         products = self.plan['food_products']
         self.assertEqual({key: product['name'] for key, product in products.items()}, {
-            'wet': 'Royal Canin Gastrointestinal Kitten Wet',
-            'wet_new': 'Royal Canin Kitten in Jelly',
-            'dry': 'Royal Canin Gastrointestinal Kitten Dry',
-            'dry_new': 'Royal Canin Kitten Dry'})
+            'wet': 'Royal Canin Veterinary Diet Gastrointestinal Kitten Ultra Soft Mousse',
+            'wet_new': 'Royal Canin Kitten Wet Food in Jelly',
+            'dry': 'Royal Canin Veterinary Diet Gastrointestinal Kitten Dry Food',
+            'dry_new': 'Royal Canin Kitten Dry Food'})
         self.assertEqual(products['wet']['pack_grams'], 195)
         self.assertEqual(products['wet_new']['pack_grams'], 85)
         self.assertEqual(len({product['button_label'] for product in products.values()}), 4)
 
-    def test_eight_advance_notices_at_1930_and_stage_morning_flags(self):
+    def test_nine_advance_notices_at_2200_and_stage_morning_flags(self):
         stages = [stage for stage in self.plan['stages'] if stage.get('advance_notice')]
         self.assertEqual([(date.fromisoformat(stage['start']) - timedelta(days=1)).isoformat()
                           for stage in stages],
-                         ['2026-11-19', '2026-11-22', '2026-11-25', '2026-11-27',
-                          '2026-11-29', '2026-12-02', '2026-12-05', '2026-12-08'])
-        self.assertEqual(self.plan['notice_time'], '19:30')
-        self.assertEqual(self.config['nutrition_notice_time'], '19:30')
+                         ['2026-11-09', '2026-11-29', '2026-12-01', '2026-12-03',
+                          '2026-12-04', '2026-12-05', '2026-12-07', '2026-12-09', '2026-12-11'])
+        self.assertEqual(self.plan['notice_time'], '22:00')
+        self.assertEqual(self.config['nutrition_notice_time'], '22:00')
         self.assertTrue(all(stage['morning_notice'] is True for stage in stages))
-        self.assertFalse(self.plan['stages'][0].get('morning_notice', False))
+        self.assertTrue(self.plan['stages'][0]['morning_notice'])
 
     def test_schedule_repeats_and_single_writer_stay_and_care_matches_owner(self):
         self.assertEqual(self.config['timezone'], 'Europe/London')

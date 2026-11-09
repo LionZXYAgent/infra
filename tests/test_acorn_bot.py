@@ -89,8 +89,8 @@ class AcornManifestTests(unittest.TestCase):
                          [[49, 49, 97], [33, 32, 65]])
         self.assertEqual([stage['dry'] for stage in config['stages'][:2]],
                          [[10, 10, 10], [15, 15, 16]])
-        self.assertEqual(config['stages'][2:], config['nutrition_plan']['stages'])
-        self.assertEqual(config['nutrition_plan_id'], 'nutrition-2026-11-09-r4')
+        self.assertEqual(config['stages'][3:], config['nutrition_plan']['stages'])
+        self.assertEqual(config['nutrition_plan_id'], 'nutrition-2026-11-09-r5')
         for stage in config['stages']:
             self.assertEqual(sum(stage['wet']), stage['daily_wet'])
             self.assertEqual(sum(stage['dry']), stage['daily_dry'])
@@ -127,8 +127,8 @@ class AcornManifestTests(unittest.TestCase):
         self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
         self.assertNotIn('imagePullSecrets', self.pod)
         self.assertEqual(self.container['image'],
-                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-af2fcb39b64bf98d16428087bb25dc0064fa4b34'
-                         '@sha256:e769f5ecd7a54f426eaab00bf84e4d71ab106104764908ba0c89312ac2324e6e')
+                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-a9e6e1046bf77e1bf48bd33a35a4758925267e1a'
+                         '@sha256:61d7b2ae1d6beaabc05cb43d24900fc1f5d9f06da3a4aff3f7500cdabfa3d6e5')
         volume = read(APP / 'storage.yaml')
         self.assertEqual(volume['metadata']['name'], 'acorn-care-bot-state')
         self.assertEqual(volume['spec']['accessModes'], ['ReadWriteOnce'])

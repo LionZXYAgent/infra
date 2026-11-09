@@ -28,7 +28,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: bot
-          image: ghcr.io/lionzxyorg/acorn-care-bot:sha-af2fcb39b64bf98d16428087bb25dc0064fa4b34@sha256:e769f5ecd7a54f426eaab00bf84e4d71ab106104764908ba0c89312ac2324e6e
+          image: ghcr.io/lionzxyorg/acorn-care-bot:sha-a9e6e1046bf77e1bf48bd33a35a4758925267e1a@sha256:61d7b2ae1d6beaabc05cb43d24900fc1f5d9f06da3a4aff3f7500cdabfa3d6e5
           imagePullPolicy: IfNotPresent
           env:
             - name: TELEGRAM_BOT_TOKEN_FILE
