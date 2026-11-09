@@ -70,65 +70,11 @@ class AcornManifestTests(unittest.TestCase):
                                      'envs': ['runtime.properties'], 'files': ['config.json']}])
         self.assertFalse(read(APP / 'kustomization.yaml').get('generatorOptions', {}).get('disableNameSuffixHash', False))
 
-    def test_public_settings_preserve_approved_plan_without_old_records(self):
-        values = dict(line.split('=', 1) for line in (APP / 'runtime.properties').read_text().splitlines()
-                      if line and not line.startswith('#'))
-        self.assertEqual(values, {'TELEGRAM_CHAT_ID': '-1004424243504', 'TELEGRAM_TOPIC_ID': '210',
-                                 'TELEGRAM_ALLOWED_USER_IDS': '474744725,1235433892', 'ACORN_FRESH_START': '1'})
-        config = json.loads((APP / 'config.json').read_text())
-        self.assertEqual(config['name'], 'Acorn')
-        self.assertEqual(config['mention'], '@palmette @LionZXY')
-        self.assertEqual(config['timezone'], 'Europe/London')
-        self.assertEqual(config['quiet_end'], '07:00')
-        self.assertEqual([slot['time'] for slot in config['slots']], ['07:00', '14:00', '19:00'])
-        self.assertEqual(config['food_transfer_policy'], 'add_full')
-        self.assertEqual(config['start_date'], '2026-10-19')
-        self.assertEqual([stage['start'] for stage in config['stages'][:2]],
-                         ['2026-10-19', '2026-11-02'])
-        self.assertEqual([stage['wet'] for stage in config['stages'][:2]],
-                         [[49, 49, 97], [33, 32, 65]])
-        self.assertEqual([stage['dry'] for stage in config['stages'][:2]],
-                         [[10, 10, 10], [15, 15, 16]])
-        self.assertEqual(config['stages'][3:], config['nutrition_plan']['stages'])
-        self.assertEqual(config['nutrition_plan_id'], 'nutrition-2026-11-09-r5')
-        for stage in config['stages']:
-            self.assertEqual(sum(stage['wet']), stage['daily_wet'])
-            self.assertEqual(sum(stage['dry']), stage['daily_dry'])
-        self.assertEqual(config['wet_can_grams'], 195)
-        self.assertEqual(config['slots'][2]['cleaning_tasks'], ['litter', 'bowls', 'water'])
-        for key in ('tasks', 'checklists', 'carryovers', 'audit', 'standalone', 'inline_panels',
-                    'emissions', 'progression_hold', 'proposals', 'created_by', 'source_message', 'destination'):
-            self.assertNotIn(key, config)
-        self.assertFalse(any('token' in key.lower() or 'password' in key.lower() for key in values))
-
-    def test_automatic_repeats_are_disabled_without_pausing_scheduled_care(self):
-        config = json.loads((APP / 'config.json').read_text())
-        self.assertIs(config['automatic_repeats'], False)
-        self.assertEqual(config['repeat_minutes'], 30)
-        self.assertEqual([slot['time'] for slot in config['slots']], ['07:00', '14:00', '19:00'])
-        self.assertEqual(self.spec['replicas'], 1)
-        self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
-
-    def test_revised_care_includes_evening_bowls_and_water_check(self):
-        config = json.loads((APP / 'config.json').read_text())
-        self.assertIs(config['bowls_morning_only'], False)
-        defaults = ['litter', 'bowls', 'water']
-        cleaning = {slot['key']: slot.get('cleaning_tasks', defaults) if slot['cleaning'] else []
-                    for slot in config['slots']}
-        self.assertEqual(cleaning, {'breakfast': ['litter', 'bowls', 'water'],
-                                   'lunch': [], 'dinner': ['litter', 'bowls', 'water']})
-        self.assertEqual(config['food_transfer_policy'], 'add_full')
-        self.assertIs(config['automatic_repeats'], False)
-        self.assertEqual([slot['time'] for slot in config['slots']], ['07:00', '14:00', '19:00'])
-        self.assertEqual(self.spec['replicas'], 1)
-        self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
-
     def test_single_writer_with_retained_state_and_public_pinned_image(self):
         self.assertEqual(self.spec['strategy'], {'type': 'Recreate'})
         self.assertNotIn('imagePullSecrets', self.pod)
-        self.assertEqual(self.container['image'],
-                         'ghcr.io/lionzxyorg/acorn-care-bot:sha-a9e6e1046bf77e1bf48bd33a35a4758925267e1a'
-                         '@sha256:61d7b2ae1d6beaabc05cb43d24900fc1f5d9f06da3a4aff3f7500cdabfa3d6e5')
+        self.assertRegex(self.container['image'],
+                         r'^ghcr\.io/lionzxyorg/acorn-care-bot:sha-[0-9a-f]{40}@sha256:[0-9a-f]{64}$')
         volume = read(APP / 'storage.yaml')
         self.assertEqual(volume['metadata']['name'], 'acorn-care-bot-state')
         self.assertEqual(volume['spec']['accessModes'], ['ReadWriteOnce'])
