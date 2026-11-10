@@ -21,5 +21,5 @@ spec:
   targetNamespace: acorn-care-bot
   images:
   - name: ghcr.io/lionzxyorg/acorn-care-bot
-    newTag: sha-e332866f261b1f24d1c8495a0334995b4d26dac5
-    digest: sha256:9db9bc684576b6ae81441b1ea84533180ce455ad579ce68384e4c2aeae562a5c
+    newTag: sha-80e95c5e676a7d6ff3cfad4e4b8fcc657989f5bd
+    digest: sha256:050e36971742960fc3d1bb0db44c5e18c94ec58e0e910260c535bf279009fd2c
